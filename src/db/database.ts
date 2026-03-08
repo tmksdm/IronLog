@@ -22,14 +22,14 @@ let initialized = false;
  * Dynamically creates the <jeep-sqlite> element and waits for it to be ready.
  */
 async function initWeb(): Promise<void> {
-  // Import the Stencil loader and register the jeep-sqlite custom element
   const { defineCustomElements } = await import('jeep-sqlite/loader');
   await defineCustomElements(window);
 
-  // Create <jeep-sqlite> element if not already present
   let jeepEl = document.querySelector('jeep-sqlite');
   if (!jeepEl) {
     jeepEl = document.createElement('jeep-sqlite');
+    // Tell jeep-sqlite where to find sql-wasm.wasm
+    jeepEl.setAttribute('wasmPath', import.meta.env.BASE_URL + 'assets');
     document.body.appendChild(jeepEl);
   }
 
