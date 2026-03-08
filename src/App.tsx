@@ -10,6 +10,7 @@ import { useAppStore } from './stores/appStore';
 import { LoadingScreen } from './components/ui';
 import { HomePage } from './pages/HomePage';
 import { ActiveWorkoutPage } from './pages/ActiveWorkoutPage';
+import { WorkoutSummaryPage } from './pages/WorkoutSummaryPage';
 
 function AppContent() {
   const { initialize, isInitialized, isLoading } = useAppStore();
@@ -27,8 +28,8 @@ function AppContent() {
       <Routes>
         <Route path="/" element={<HomePage />} />
         <Route path="/workout" element={<ActiveWorkoutPage />} />
+        <Route path="/summary/:sessionId" element={<WorkoutSummaryPage />} />
         {/* Future routes */}
-        {/* <Route path="/summary/:sessionId" element={<WorkoutSummaryPage />} /> */}
         {/* <Route path="/history" element={<HistoryPage />} /> */}
         {/* <Route path="/analytics" element={<AnalyticsPage />} /> */}
         {/* <Route path="/settings" element={<SettingsPage />} /> */}

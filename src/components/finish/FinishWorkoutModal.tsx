@@ -44,7 +44,7 @@ export default function FinishWorkoutModal({ isOpen, onClose }: FinishWorkoutMod
       await refreshNextDayInfo();
       if (finishedSession) {
         // TODO: navigate to WorkoutSummaryPage when it's built
-        navigate('/', { replace: true });
+        navigate(`/summary/${finishedSession.id}`, { replace: true });
       }
     } catch (error) {
       console.error('Failed to finish workout:', error);
