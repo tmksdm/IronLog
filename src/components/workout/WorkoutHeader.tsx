@@ -20,6 +20,12 @@ interface WorkoutHeaderProps {
 
 const dayNames: Record<number, string> = { 1: 'Присед', 2: 'Тяга', 3: 'Жим' };
 
+function formatElapsed(diffSec: number): string {
+  const min = Math.floor(diffSec / 60);
+  const sec = diffSec % 60;
+  return `${min}:${sec.toString().padStart(2, '0')}`;
+}
+
 export function WorkoutHeader({
   session,
   exercisesDone,
@@ -34,12 +40,19 @@ export function WorkoutHeader({
   useEffect(() => {
     const startTime = new Date(session.timeStart).getTime();
 
+    // If timeEnd is already set, show fixed duration and don't tick
+    if (session.timeEnd) {
+      const endTime = new Date(session.timeEnd).getTime();
+      const diffSec = Math.max(0, Math.floor((endTime - startTime) / 1000));
+      setElapsed(formatElapsed(diffSec));
+      return;
+    }
+
+    // Otherwise, tick every second
     const updateElapsed = () => {
       const now = Date.now();
       const diffSec = Math.floor((now - startTime) / 1000);
-      const min = Math.floor(diffSec / 60);
-      const sec = diffSec % 60;
-      setElapsed(`${min}:${sec.toString().padStart(2, '0')}`);
+      setElapsed(formatElapsed(diffSec));
     };
 
     updateElapsed();
@@ -48,7 +61,7 @@ export function WorkoutHeader({
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
-  }, [session.timeStart]);
+  }, [session.timeStart, session.timeEnd]);
 
   const directionLabel = session.direction === 'normal' ? '→' : '←';
   const progressPercent = exercisesTotal > 0
@@ -64,7 +77,9 @@ export function WorkoutHeader({
             {dayNames[session.dayTypeId]}
           </h1>
           <span className="text-[#707070] text-lg">{directionLabel}</span>
-          <span className="text-[#B0B0B0] text-sm font-mono">{elapsed}</span>
+          <span className={`text-sm font-mono ${session.timeEnd ? 'text-[#4CAF50]' : 'text-[#B0B0B0]'}`}>
+            {elapsed}
+          </span>
         </div>
 
         <button
