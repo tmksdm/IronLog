@@ -1,8 +1,9 @@
-// src/pages/WorkoutSummaryPage.tsx
+// src/pages/WorkoutDetailPage.tsx
 
 /**
- * Post-workout summary page.
- * Shows detailed results of a completed workout session.
+ * Workout detail page — shows a past workout session.
+ * Reuses the same data loading and rendering logic as WorkoutSummaryPage,
+ * but with a "Back" button instead of "Home" button.
  */
 
 import { useEffect, useState, useMemo } from 'react';
@@ -12,9 +13,7 @@ import {
   Dumbbell,
   Scale,
   Activity,
-  Home,
-  TrendingUp,
-  TrendingDown,
+  ArrowLeft,
   CheckCircle2,
   CircleOff,
   CircleDot,
@@ -27,36 +26,25 @@ import {
   formatWorkoutDuration,
   formatTonnage,
   formatDecimal,
-  formatWeight,
   formatTimeMMSS,
   formatRepsSum,
 } from '../utils/format';
 import { getDayTypeColor, getDayTypeTextClass, DAY_TYPE_NAMES_RU } from '../theme';
 import { LoadingScreen } from '../components/ui';
 
-// --- Weight change detection ---
-
-interface WeightChangeInfo {
-  exerciseId: string;
-  type: 'increase' | 'decrease';
-  oldWeight: number;
-  newWeight: number;
-}
-
-export function WorkoutSummaryPage() {
+export function WorkoutDetailPage() {
   const { sessionId } = useParams<{ sessionId: string }>();
   const navigate = useNavigate();
 
   const [session, setSession] = useState<WorkoutSession | null>(null);
   const [exerciseSummaries, setExerciseSummaries] = useState<ExerciseSummary[]>([]);
   const [cardioLogs, setCardioLogs] = useState<CardioLog[]>([]);
-  const [weightChanges, setWeightChanges] = useState<WeightChangeInfo[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!sessionId) {
-      navigate('/', { replace: true });
+      navigate('/history', { replace: true });
       return;
     }
     loadData(sessionId);
@@ -82,34 +70,8 @@ export function WorkoutSummaryPage() {
       setSession(sess);
       setExerciseSummaries(summaries);
       setCardioLogs(cardio);
-
-      // Detect weight changes by comparing logged weight vs current exercise weight
-      const changes: WeightChangeInfo[] = [];
-      for (const summary of summaries) {
-        if (!summary.hasAddedWeight || summary.isSkipped) continue;
-
-        const workingSets = summary.sets.filter(
-          (s) => s.setType === 'working' && !s.isSkipped
-        );
-        if (workingSets.length === 0) continue;
-
-        // The weight used in the workout
-        const loggedWeight = workingSets[0]!.weight;
-        // The current weight in the exercise table (may have changed after progression)
-        const currentWeight = summary.workingWeight;
-
-        if (currentWeight !== null && currentWeight !== loggedWeight) {
-          changes.push({
-            exerciseId: summary.exerciseId,
-            type: currentWeight > loggedWeight ? 'increase' : 'decrease',
-            oldWeight: loggedWeight,
-            newWeight: currentWeight,
-          });
-        }
-      }
-      setWeightChanges(changes);
     } catch (err) {
-      console.error('Failed to load workout summary:', err);
+      console.error('Failed to load workout detail:', err);
       setError('Ошибка загрузки данных');
     } finally {
       setIsLoading(false);
@@ -171,11 +133,6 @@ export function WorkoutSummaryPage() {
     return { completed, skipped, notDone, total: exerciseSummaries.length };
   }, [exerciseSummaries]);
 
-  // Helper to get weight change for an exercise
-  function getWeightChange(exerciseId: string): WeightChangeInfo | undefined {
-    return weightChanges.find((wc) => wc.exerciseId === exerciseId);
-  }
-
   // --- Render ---
 
   if (isLoading) return <LoadingScreen />;
@@ -185,10 +142,10 @@ export function WorkoutSummaryPage() {
       <div className="flex flex-col items-center justify-center h-screen bg-[#121212] px-4">
         <p className="text-[#B0B0B0] text-lg mb-4">{error ?? 'Тренировка не найдена'}</p>
         <button
-          onClick={() => navigate('/', { replace: true })}
+          onClick={() => navigate('/history', { replace: true })}
           className="px-6 py-3 bg-[#4CAF50] text-white rounded-xl font-semibold active:bg-[#388E3C] transition-colors"
         >
-          На главную
+          К истории
         </button>
       </div>
     );
@@ -206,10 +163,10 @@ export function WorkoutSummaryPage() {
       <div className="sticky top-0 z-10 bg-[#121212] border-b border-[#333333]">
         <div className="flex items-center justify-between px-4 py-3">
           <button
-            onClick={() => navigate('/', { replace: true })}
+            onClick={() => navigate(-1)}
             className="w-10 h-10 rounded-full bg-[#1E1E1E] flex items-center justify-center active:bg-[#2A2A2A] transition-colors"
           >
-            <Home size={20} className="text-[#B0B0B0]" />
+            <ArrowLeft size={20} className="text-[#B0B0B0]" />
           </button>
           <div className="flex flex-col items-center">
             <h1 className={`text-lg font-bold ${dayTextClass}`}>{dayName}</h1>
@@ -222,17 +179,14 @@ export function WorkoutSummaryPage() {
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-y-auto px-4 pb-8">
+      <div className="flex-1 overflow-y-auto px-4">
         {/* Stats grid */}
         <div className="grid grid-cols-2 gap-3 mt-4">
-          {/* Duration */}
           <div className="bg-[#252525] rounded-xl p-3 flex flex-col items-center gap-1">
             <Clock size={20} className="text-[#2196F3]" />
             <span className="text-xs text-[#B0B0B0]">Время</span>
             <span className="text-lg font-bold text-white">{durationStr}</span>
           </div>
-
-          {/* Tonnage */}
           <div className="bg-[#252525] rounded-xl p-3 flex flex-col items-center gap-1">
             <Dumbbell size={20} className="text-[#FF9800]" />
             <span className="text-xs text-[#B0B0B0]">Тоннаж</span>
@@ -289,7 +243,7 @@ export function WorkoutSummaryPage() {
           <div className="flex items-center justify-between mb-2">
             <span className="text-sm text-[#B0B0B0]">Упражнения</span>
             <span className="text-sm text-white font-semibold">
-              {exerciseCounts.completed + exerciseCounts.skipped + exerciseCounts.notDone}
+              {exerciseCounts.total}
             </span>
           </div>
           <div className="flex flex-wrap gap-3">
@@ -328,111 +282,40 @@ export function WorkoutSummaryPage() {
           </div>
         )}
 
-        {/* Weight changes banner */}
-        {weightChanges.length > 0 && (
-          <div className="mt-4 mb-1">
-            <h3 className="text-sm font-semibold text-[#B0B0B0] mb-2">
-              Изменения весов
-            </h3>
-            <div className="flex flex-col gap-2">
-              {weightChanges.map((wc) => {
-                const summary = exerciseSummaries.find(
-                  (s) => s.exerciseId === wc.exerciseId
-                );
-                const isIncrease = wc.type === 'increase';
-                return (
-                  <div
-                    key={wc.exerciseId}
-                    className={`rounded-xl p-3 flex items-center gap-3 ${
-                      isIncrease
-                        ? 'bg-[#4CAF50]/10 border border-[#4CAF50]/30'
-                        : 'bg-[#F44336]/10 border border-[#F44336]/30'
-                    }`}
-                  >
-                    {isIncrease ? (
-                      <TrendingUp size={20} className="text-[#4CAF50] shrink-0" />
-                    ) : (
-                      <TrendingDown size={20} className="text-[#F44336] shrink-0" />
-                    )}
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-white truncate">
-                        {summary?.exerciseName ?? ''}
-                      </p>
-                      <p
-                        className={`text-xs ${
-                          isIncrease ? 'text-[#81C784]' : 'text-[#F44336]'
-                        }`}
-                      >
-                        {formatWeight(wc.oldWeight)} → {formatWeight(wc.newWeight)}
-                      </p>
-                    </div>
-                    <span
-                      className={`text-sm font-bold ${
-                        isIncrease ? 'text-[#4CAF50]' : 'text-[#F44336]'
-                      }`}
-                    >
-                      {isIncrease ? '+' : ''}
-                      {formatDecimal(wc.newWeight - wc.oldWeight)} кг
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
         {/* Exercise details */}
         <div className="mt-4">
           <h3 className="text-sm font-semibold text-[#B0B0B0] mb-2">
             Результаты по упражнениям
           </h3>
-          <div className="flex flex-col gap-2">
+          <div className="flex flex-col gap-2 pb-4">
             {exerciseSummaries.map((summary) => (
-              <ExerciseSummaryCard
+              <ExerciseDetailCard
                 key={summary.exerciseId}
                 summary={summary}
-                weightChange={getWeightChange(summary.exerciseId)}
                 dayColor={dayColor}
               />
             ))}
           </div>
         </div>
-
-        {/* Home button */}
-        <button
-          onClick={() => navigate('/', { replace: true })}
-          className="w-full mt-6 mb-4 py-4 rounded-xl bg-[#1E1E1E] text-[#B0B0B0] font-semibold text-base active:bg-[#2A2A2A] transition-colors flex items-center justify-center gap-2 border border-[#333333]"
-        >
-          <Home size={20} />
-          На главную
-        </button>
       </div>
     </div>
   );
 }
 
 // ==========================================
-// Exercise Summary Card Component
+// Exercise Detail Card Component
 // ==========================================
 
-interface ExerciseSummaryCardProps {
+interface ExerciseDetailCardProps {
   summary: ExerciseSummary;
-  weightChange?: WeightChangeInfo;
   dayColor: string;
 }
 
-function ExerciseSummaryCard({
-  summary,
-  weightChange,
-  dayColor,
-}: ExerciseSummaryCardProps) {
+function ExerciseDetailCard({ summary, dayColor }: ExerciseDetailCardProps) {
   const { exerciseName, sets, isSkipped, hasAddedWeight, totalKg } = summary;
 
-  // Separate warmup and working sets
   const warmupSets = sets.filter((s) => s.setType === 'warmup' && !s.isSkipped);
   const workingSets = sets.filter((s) => s.setType === 'working' && !s.isSkipped);
-
-  // Working set reps for summary line
   const workingReps = workingSets.map((s) => s.actualReps);
   const workingTotal = workingReps.reduce((a, b) => a + b, 0);
 
@@ -453,7 +336,6 @@ function ExerciseSummaryCard({
     );
   }
 
-  // No sets recorded at all
   if (sets.length === 0 || (workingSets.length === 0 && warmupSets.length === 0)) {
     return (
       <div className="bg-[#252525] rounded-xl p-3 opacity-60">
@@ -475,7 +357,7 @@ function ExerciseSummaryCard({
 
   return (
     <div className="bg-[#252525] rounded-xl p-3">
-      {/* Exercise name + weight change indicator */}
+      {/* Exercise name */}
       <div className="flex items-center gap-2 mb-2">
         <div
           className="w-1 h-8 rounded-full shrink-0"
@@ -484,19 +366,6 @@ function ExerciseSummaryCard({
         <div className="flex-1 min-w-0">
           <p className="text-sm font-semibold text-white truncate">{exerciseName}</p>
         </div>
-        {weightChange && (
-          <div
-            className={`flex items-center gap-1 shrink-0 ${
-              weightChange.type === 'increase' ? 'text-[#4CAF50]' : 'text-[#F44336]'
-            }`}
-          >
-            {weightChange.type === 'increase' ? (
-              <TrendingUp size={14} />
-            ) : (
-              <TrendingDown size={14} />
-            )}
-          </div>
-        )}
       </div>
 
       {/* Working sets summary line */}
