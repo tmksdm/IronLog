@@ -1,38 +1,65 @@
+/* src/index.css */
+
 @import "tailwindcss";
 
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-  -webkit-tap-highlight-color: transparent;
+/* ============================================
+   Base layer — resets and defaults.
+   Lives INSIDE a layer, so Tailwind utilities
+   (which are also layered but with higher priority)
+   can override these values.
+   ============================================ */
+@layer base {
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  html, body, #root {
+    height: 100%;
+    width: 100%;
+    overflow-x: hidden;
+    background-color: #121212;
+    color: #FFFFFF;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  }
+
+  /* Prevent pull-to-refresh on mobile */
+  body {
+    overscroll-behavior-y: contain;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Smooth scrolling */
+  * {
+    scroll-behavior: smooth;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Hide scrollbars but allow scrolling */
+  ::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Reset margins on specific elements (not universal * reset!) */
+  h1, h2, h3, h4, h5, h6, p, figure, blockquote, dl, dd, ul, ol {
+    margin: 0;
+  }
+
+  /* Form elements inherit font */
+  input, button, textarea, select {
+    font: inherit;
+  }
 }
 
-html, body, #root {
-  height: 100%;
-  width: 100%;
-  overflow-x: hidden;
-  background-color: #121212;
-  color: #FFFFFF;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-}
-
-/* Prevent pull-to-refresh on mobile */
-body {
-  overscroll-behavior-y: contain;
-}
-
-/* Smooth scrolling */
-* {
-  scroll-behavior: smooth;
-  -webkit-overflow-scrolling: touch;
-}
-
-/* Hide scrollbars but allow scrolling */
-::-webkit-scrollbar {
-  display: none;
-}
-
-/* Modal slide-up animation */
+/* ============================================
+   Custom keyframes and animation classes.
+   These are utilities so they go in the
+   utilities layer or stay unlayered (they
+   don't conflict with Tailwind).
+   ============================================ */
 @keyframes slide-up {
   from {
     transform: translateY(100%);
@@ -44,27 +71,35 @@ body {
   }
 }
 
-.animate-slide-up {
-  animation: slide-up 0.25s ease-out;
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
-/* Spinner animation (used by LoadingScreen) */
 @keyframes spin {
   to {
     transform: rotate(360deg);
   }
 }
 
-.animate-spin {
+/* Animation utility classes */
+@utility animate-slide-up {
+  animation: slide-up 0.25s ease-out;
+}
+
+@utility animate-fade-in {
+  animation: fade-in 0.2s ease-out;
+}
+
+@utility animate-spin {
   animation: spin 1s linear infinite;
 }
 
-/* Backdrop fade-in animation */
-@keyframes fade-in {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-
-.animate-fade-in {
-  animation: fade-in 0.2s ease-out;
+/* Scrollbar-hide utility (used on nav grid) */
+@utility scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
 }
