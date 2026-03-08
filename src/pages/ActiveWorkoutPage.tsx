@@ -3,7 +3,7 @@
 /**
  * Full active workout page.
  * Vertical scrollable list of exercise cards with navigation grid,
- * header with timer, rest timer overlay, and finish/cancel actions.
+ * header with timer, rest timer overlay, finish modal, and cancel actions.
  */
 
 import { useState, useCallback, useRef, useEffect } from 'react';
@@ -17,6 +17,7 @@ import {
   RestTimer,
   ConfirmModal,
 } from '../components/workout';
+import { FinishWorkoutModal } from '../components/finish';
 
 export function ActiveWorkoutPage() {
   const navigate = useNavigate();
@@ -41,6 +42,7 @@ export function ActiveWorkoutPage() {
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
   const [showCancelFinal, setShowCancelFinal] = useState(false);
   const [showSkipConfirm, setShowSkipConfirm] = useState<number | null>(null);
+  const [isFinishModalOpen, setIsFinishModalOpen] = useState(false);
 
   // Refs for scrolling
   const exerciseRefs = useRef<Map<number, HTMLDivElement>>(new Map());
@@ -109,11 +111,13 @@ export function ActiveWorkoutPage() {
   );
 
   const handleFinishPress = useCallback(() => {
-    recordEndTime();
-    // Navigate to finish flow (FinishWorkoutModal will be on this page or a route)
-    // For now, navigate — we'll implement the finish modal in the next step
-    navigate('/finish');
-  }, [recordEndTime, navigate]);
+    recordEndTime(); // Record end time immediately, before modal opens
+    setIsFinishModalOpen(true);
+  }, [recordEndTime]);
+
+  const handleFinishModalClose = useCallback(() => {
+    setIsFinishModalOpen(false);
+  }, []);
 
   const handleCancelPress = useCallback(() => {
     setShowCancelConfirm(true);
@@ -205,6 +209,12 @@ export function ActiveWorkoutPage() {
 
       {/* Rest timer overlay / bubble */}
       <RestTimer />
+
+      {/* Finish workout modal */}
+      <FinishWorkoutModal
+        isOpen={isFinishModalOpen}
+        onClose={handleFinishModalClose}
+      />
 
       {/* Cancel confirmation — step 1 */}
       <ConfirmModal

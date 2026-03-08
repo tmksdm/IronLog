@@ -88,3 +88,10 @@ export function getStatusColor(status: string): string {
     default: return colors.statusNotStarted;
   }
 }
+
+// Day type names in Russian (indexed by DayTypeId)
+export const DAY_TYPE_NAMES_RU: Record<number, string> = {
+  1: 'Присед',
+  2: 'Тяга',
+  3: 'Жим',
+};
