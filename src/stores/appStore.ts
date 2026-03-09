@@ -2,7 +2,7 @@
 
 /**
  * Global application store.
- * Holds day types, next workout info, and crash resilience state.
+ * Holds day types, next workout info, crash resilience state, and sync status.
  */
 
 import { create } from 'zustand';
@@ -21,6 +21,7 @@ import {
   workoutStateRepo,
 } from '../db';
 import { getDirectionForNextSession } from '../utils';
+import { pullFromCloud } from '../lib/sync';
 
 export interface AppState {
   // --- Data ---
@@ -30,6 +31,10 @@ export interface AppState {
   lastSession: WorkoutSession | null;
   isLoading: boolean;
   isInitialized: boolean;
+
+  // --- Sync ---
+  isSyncing: boolean;
+  lastSyncError: string | null;
 
   // --- Crash resilience ---
   pendingRestore: WorkoutSnapshot | null;
@@ -50,6 +55,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   lastSession: null,
   isLoading: false,
   isInitialized: false,
+  isSyncing: false,
+  lastSyncError: null,
   pendingRestore: null,
 
   initialize: async () => {
@@ -57,6 +64,17 @@ export const useAppStore = create<AppState>((set, get) => ({
 
     set({ isLoading: true });
     try {
+      // Pull cloud data first (replaces local if cloud has data)
+      set({ isSyncing: true, lastSyncError: null });
+      try {
+        await pullFromCloud();
+      } catch (err: any) {
+        console.error('Cloud sync failed, using local data:', err);
+        set({ lastSyncError: err?.message ?? 'Sync failed' });
+      } finally {
+        set({ isSyncing: false });
+      }
+
       const dayTypes = await dayTypeRepo.getAllDayTypes();
       const nextDayTypeId = await dayTypeRepo.getNextDayTypeId();
 

@@ -10,6 +10,8 @@
 
 import { getDb, saveToStore } from '../db/database';
 import type { BackupData } from '../types';
+import { pushToCloud } from '../lib/sync';
+
 
 // ==========================================
 // Types
@@ -251,6 +253,11 @@ export async function restoreFromBackup(data: BackupData): Promise<void> {
     await db.execute('PRAGMA foreign_keys = ON;');
     await saveToStore();
   }
+
+  // Sync imported data to cloud (fire and forget)
+  pushToCloud().catch((err) =>
+    console.error('Cloud sync after import failed:', err)
+  );
 }
 
 // ==========================================

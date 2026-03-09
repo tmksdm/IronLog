@@ -1,14 +1,17 @@
 // src/App.tsx
 
 /**
- * Root component with routing, bottom navigation, and app initialization.
+ * Root component with authentication gate, routing, bottom navigation,
+ * and app initialization.
  */
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { HashRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { supabase } from './lib/supabase';
 import { useAppStore } from './stores/appStore';
 import { LoadingScreen } from './components/ui';
 import { BottomNav } from './components/layout';
+import { LoginPage } from './pages/LoginPage';
 import { HomePage } from './pages/HomePage';
 import { ActiveWorkoutPage } from './pages/ActiveWorkoutPage';
 import { WorkoutSummaryPage } from './pages/WorkoutSummaryPage';
@@ -59,6 +62,48 @@ function AppContent() {
 }
 
 function App() {
+  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+
+  useEffect(() => {
+    // Check for existing session on mount
+    const checkSession = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        setIsAuthenticated(!!session);
+      } catch (err) {
+        console.error('Failed to check auth session:', err);
+        setIsAuthenticated(false);
+      } finally {
+        setIsCheckingAuth(false);
+      }
+    };
+
+    checkSession();
+
+    // Listen for auth state changes (login, logout, token refresh)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (_event, session) => {
+        setIsAuthenticated(!!session);
+      }
+    );
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, []);
+
+  // Show loading while checking for saved session
+  if (isCheckingAuth) {
+    return <LoadingScreen />;
+  }
+
+  // Not logged in — show login page
+  if (!isAuthenticated) {
+    return <LoginPage onLoginSuccess={() => setIsAuthenticated(true)} />;
+  }
+
+  // Logged in — show the app
   return (
     <HashRouter>
       <AppContent />

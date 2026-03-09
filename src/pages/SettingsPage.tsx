@@ -16,6 +16,7 @@ import {
   DatabaseBackup,
   Loader2,
   Info,
+  LogOut,  
 } from 'lucide-react';
 import { Card } from '../components/ui';
 import { ImportPreviewModal } from '../components/settings';
@@ -23,6 +24,7 @@ import { exportAsJSON, exportAsCSV, pickAndParseBackup, restoreFromBackup } from
 import type { ImportPreview } from '../utils';
 import { useAppStore } from '../stores/appStore';
 import { APP_VERSION, CHANGELOG } from '../version';
+import { supabase } from '../lib/supabase';
 
 // ==========================================
 // Menu item component
@@ -260,6 +262,12 @@ export function SettingsPage() {
     setImportPreview(null);
   };
 
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+  };
+
   // ---- Render ----
 
   return (
@@ -310,6 +318,17 @@ export function SettingsPage() {
           />
         </Section>
 
+        {/* Account */}
+        <Section title="Аккаунт">
+          <MenuItem
+            icon={<LogOut size={20} className="text-red-400" />}
+            iconBgClass="bg-red-600/20"
+            label="Выйти"
+            sublabel="Выйти из аккаунта"
+            onClick={() => setShowLogoutConfirm(true)}
+          />
+        </Section>
+
         {/* About / Version */}
         <Section title="О приложении">
           <ChangelogSection />
@@ -340,6 +359,42 @@ export function SettingsPage() {
         onCancel={handleCancelImport}
         isRestoring={isRestoring}
       />
+
+      {/* Logout confirmation */}
+      {showLogoutConfirm && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-6"
+          onClick={() => setShowLogoutConfirm(false)}
+        >
+          <div
+            className="bg-[#1E1E1E] rounded-2xl p-6 w-full max-w-[320px]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-white font-bold text-lg mb-2">Выйти?</h3>
+            <p className="text-[#999] text-sm mb-6">
+              Для входа потребуется ввести email и пароль заново.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowLogoutConfirm(false)}
+                className="flex-1 h-11 rounded-xl bg-[#333] text-white font-medium
+                  active:bg-[#444] transition-colors"
+              >
+                Отмена
+              </button>
+              <button
+                onClick={handleLogout}
+                className="flex-1 h-11 rounded-xl bg-red-600 text-white font-medium
+                  active:bg-red-700 transition-colors"
+              >
+                Выйти
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+
     </div>
   );
 }

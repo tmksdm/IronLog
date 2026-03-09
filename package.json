@@ -4,18 +4,19 @@
   "version": "0.9.0",
   "type": "module",
   "scripts": {
-  "dev": "vite",
-  "build": "tsc -b && vite build",
-  "build:ghpages": "tsc -b && vite build --mode ghpages",
-  "build:android": "tsc -b && vite build && npx cap sync android",
-  "lint": "eslint .",
-  "preview": "vite preview"
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "build:ghpages": "tsc -b && vite build --mode ghpages",
+    "build:android": "tsc -b && vite build && npx cap sync android",
+    "lint": "eslint .",
+    "preview": "vite preview"
   },
   "dependencies": {
     "@capacitor-community/sqlite": "8.0",
     "@capacitor/core": "8.2",
     "@capacitor/filesystem": "8.0",
     "@capacitor/share": "8.0",
+    "@supabase/supabase-js": "^2.99.0",
     "jeep-sqlite": "^2.8.0",
     "lucide-react": "^0.577.0",
     "react": "^19.2.0",

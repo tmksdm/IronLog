@@ -13,6 +13,8 @@ import type {
   SetType,
   CardioType,
 } from '../../types';
+import { deleteSessionFromCloud } from '../../lib/sync';
+
 
 // --- Session row mapping ---
 
@@ -201,6 +203,10 @@ export async function deleteWorkoutSession(sessionId: string): Promise<void> {
   await db.run('DELETE FROM exercise_logs WHERE workout_session_id = ?', [sessionId]);
   await db.run('DELETE FROM workout_sessions WHERE id = ?', [sessionId]);
   await saveToStore();
+  // Sync deletion to cloud
+  deleteSessionFromCloud(sessionId).catch((err) =>
+    console.error('Cloud sync after session delete failed:', err)
+  );
 }
 
 // ==========================================
