@@ -1,7 +1,8 @@
 // src/pages/SettingsPage.tsx
 
 /**
- * Settings page — exercise editor, export (JSON/CSV), import (JSON v1/v2).
+ * Settings page — exercise editor, export (JSON/CSV), import (JSON v1/v2),
+ * app version and changelog.
  */
 
 import React, { useState } from 'react';
@@ -9,16 +10,19 @@ import { useNavigate } from 'react-router-dom';
 import {
   Dumbbell,
   ChevronRight,
+  ChevronDown,
   FileJson,
   FileSpreadsheet,
   DatabaseBackup,
   Loader2,
+  Info,
 } from 'lucide-react';
 import { Card } from '../components/ui';
 import { ImportPreviewModal } from '../components/settings';
 import { exportAsJSON, exportAsCSV, pickAndParseBackup, restoreFromBackup } from '../utils';
 import type { ImportPreview } from '../utils';
 import { useAppStore } from '../stores/appStore';
+import { APP_VERSION, CHANGELOG } from '../version';
 
 // ==========================================
 // Menu item component
@@ -87,6 +91,64 @@ function Section({
         {title}
       </div>
       <div className="space-y-2">{children}</div>
+    </div>
+  );
+}
+
+// ==========================================
+// Changelog component
+// ==========================================
+
+function ChangelogSection() {
+  const [isExpanded, setIsExpanded] = useState(false);
+
+  return (
+    <div>
+      {/* Version header — always visible */}
+      <Card
+        onClick={() => setIsExpanded(!isExpanded)}
+        className="flex items-center gap-4 !p-4"
+      >
+        <div className="w-10 h-10 rounded-full flex items-center justify-center shrink-0 bg-[#333]">
+          <Info size={20} className="text-[#888]" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="text-white font-medium">IronLog v{APP_VERSION}</div>
+          <div className="text-xs text-[#707070] mt-0.5">
+            Нажми, чтобы {isExpanded ? 'скрыть' : 'показать'} историю изменений
+          </div>
+        </div>
+        <ChevronDown
+          size={20}
+          className={`text-[#555] shrink-0 transition-transform duration-200 ${
+            isExpanded ? 'rotate-180' : ''
+          }`}
+        />
+      </Card>
+
+      {/* Changelog entries */}
+      {isExpanded && (
+        <div className="mt-2 space-y-3">
+          {CHANGELOG.map((entry) => (
+            <Card key={entry.version} className="!p-4">
+              <div className="flex items-baseline gap-2 mb-2">
+                <span className="text-green-500 font-bold text-sm">
+                  v{entry.version}
+                </span>
+                <span className="text-[#555] text-xs">{entry.date}</span>
+              </div>
+              <ul className="space-y-1">
+                {entry.changes.map((change, i) => (
+                  <li key={i} className="text-[#999] text-sm flex gap-2">
+                    <span className="text-[#555] shrink-0">•</span>
+                    <span>{change}</span>
+                  </li>
+                ))}
+              </ul>
+            </Card>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -246,6 +308,11 @@ export function SettingsPage() {
             onClick={handleImportJSON}
             loading={isPickingFile}
           />
+        </Section>
+
+        {/* About / Version */}
+        <Section title="О приложении">
+          <ChangelogSection />
         </Section>
       </div>
 
