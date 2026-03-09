@@ -1,0 +1,42 @@
+name: Build Android APK
+
+# Runs only when you manually trigger it from GitHub
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - run: npm ci
+
+      - run: npm install @capacitor/android@^8.2
+
+      - run: npm run build
+
+      - run: npx cap add android
+
+      - run: npx cap sync android
+
+      - name: Build debug APK
+        working-directory: android
+        run: chmod +x gradlew && ./gradlew assembleDebug
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: ironlog-debug
+          path: android/app/build/outputs/apk/debug/app-debug.apk
