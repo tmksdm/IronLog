@@ -162,10 +162,22 @@ export interface MonthlyDuration {
   workoutCount: number;
 }
 
+export interface YearlyDuration {
+  year: number;
+  avgDurationMin: number;
+  workoutCount: number;
+}
+
 export interface MonthlyRunTime {
   year: number;
   month: number;
   label: string;
+  avgDurationSec: number;
+  runCount: number;
+}
+
+export interface YearlyRunTime {
+  year: number;
   avgDurationSec: number;
   runCount: number;
 }

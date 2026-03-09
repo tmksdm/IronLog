@@ -12,7 +12,9 @@ import type {
   MonthlyBodyWeight,
   YearlyBodyWeight,
   MonthlyDuration,
+  YearlyDuration,
   MonthlyRunTime,
+  YearlyRunTime,
   ExerciseProgressPoint,
   ExercisePickerItem,
 } from '../../types';
@@ -32,9 +34,6 @@ function monthLabel(year: number, month: number): string {
 // Tonnage
 // ==========================================
 
-/**
- * Get tonnage per workout, optionally filtered by day type.
- */
 export async function getTonnagePerWorkout(
   dayTypeId?: DayTypeId,
   limit?: number
@@ -68,9 +67,6 @@ export async function getTonnagePerWorkout(
   }));
 }
 
-/**
- * Get average tonnage per month, optionally filtered by day type.
- */
 export async function getMonthlyTonnage(
   dayTypeId?: DayTypeId
 ): Promise<MonthlyTonnage[]> {
@@ -103,9 +99,6 @@ export async function getMonthlyTonnage(
   }));
 }
 
-/**
- * Get average tonnage per year (average of monthly averages).
- */
 export async function getYearlyTonnage(
   dayTypeId?: DayTypeId
 ): Promise<YearlyTonnage[]> {
@@ -150,9 +143,6 @@ export async function getYearlyTonnage(
 // Body Weight
 // ==========================================
 
-/**
- * Get body weight data point per workout (average of before/after).
- */
 export async function getBodyWeightTrend(): Promise<BodyWeightDataPoint[]> {
   const db = await getDb();
   const result = await db.query(
@@ -179,9 +169,6 @@ export async function getBodyWeightTrend(): Promise<BodyWeightDataPoint[]> {
   });
 }
 
-/**
- * Get average body weight per month.
- */
 export async function getMonthlyBodyWeight(): Promise<MonthlyBodyWeight[]> {
   const db = await getDb();
   const result = await db.query(
@@ -213,12 +200,8 @@ export async function getMonthlyBodyWeight(): Promise<MonthlyBodyWeight[]> {
   }));
 }
 
-/**
- * Get average body weight per year (average of monthly averages).
- */
 export async function getYearlyBodyWeight(): Promise<YearlyBodyWeight[]> {
   const db = await getDb();
-
   const result = await db.query(
     `SELECT
        year,
@@ -253,14 +236,10 @@ export async function getYearlyBodyWeight(): Promise<YearlyBodyWeight[]> {
   }));
 }
 
-
 // ==========================================
 // Duration
 // ==========================================
 
-/**
- * Get average workout duration per month (in minutes).
- */
 export async function getMonthlyDuration(): Promise<MonthlyDuration[]> {
   const db = await getDb();
   const result = await db.query(
@@ -286,13 +265,40 @@ export async function getMonthlyDuration(): Promise<MonthlyDuration[]> {
   }));
 }
 
+export async function getYearlyDuration(): Promise<YearlyDuration[]> {
+  const db = await getDb();
+  const result = await db.query(
+    `SELECT
+       year,
+       AVG(monthly_avg) as avg_duration_min,
+       SUM(cnt) as workout_count
+     FROM (
+       SELECT
+         CAST(strftime('%Y', date) AS INTEGER) as year,
+         CAST(strftime('%m', date) AS INTEGER) as month,
+         AVG(
+           (julianday(time_end) - julianday(time_start)) * 24 * 60
+         ) as monthly_avg,
+         COUNT(*) as cnt
+       FROM workout_sessions
+       WHERE time_end IS NOT NULL
+       GROUP BY year, month
+     )
+     GROUP BY year
+     ORDER BY year ASC`
+  );
+
+  return (result.values ?? []).map((row: any) => ({
+    year: row.year,
+    avgDurationMin: Math.round(row.avg_duration_min),
+    workoutCount: row.workout_count,
+  }));
+}
+
 // ==========================================
 // Cardio (Treadmill 3km)
 // ==========================================
 
-/**
- * Get average 3km run time per month.
- */
 export async function getMonthlyRunTime(): Promise<MonthlyRunTime[]> {
   const db = await getDb();
   const result = await db.query(
@@ -319,13 +325,41 @@ export async function getMonthlyRunTime(): Promise<MonthlyRunTime[]> {
   }));
 }
 
+export async function getYearlyRunTime(): Promise<YearlyRunTime[]> {
+  const db = await getDb();
+  const result = await db.query(
+    `SELECT
+       year,
+       AVG(monthly_avg) as avg_duration_sec,
+       SUM(cnt) as run_count
+     FROM (
+       SELECT
+         CAST(strftime('%Y', ws.date) AS INTEGER) as year,
+         CAST(strftime('%m', ws.date) AS INTEGER) as month,
+         AVG(cl.duration_seconds) as monthly_avg,
+         COUNT(*) as cnt
+       FROM cardio_logs cl
+       JOIN workout_sessions ws ON cl.workout_session_id = ws.id
+       WHERE cl.type = 'treadmill_3km'
+         AND cl.duration_seconds IS NOT NULL
+         AND cl.duration_seconds > 0
+       GROUP BY year, month
+     )
+     GROUP BY year
+     ORDER BY year ASC`
+  );
+
+  return (result.values ?? []).map((row: any) => ({
+    year: row.year,
+    avgDurationSec: Math.round(row.avg_duration_sec),
+    runCount: row.run_count,
+  }));
+}
+
 // ==========================================
 // Per-exercise progress
 // ==========================================
 
-/**
- * Get progress history for a specific exercise across all completed sessions.
- */
 export async function getExerciseProgress(
   exerciseId: string
 ): Promise<ExerciseProgressPoint[]> {
@@ -350,7 +384,6 @@ export async function getExerciseProgress(
 
   const rows = result.values ?? [];
 
-  // Group by session
   const sessionMap = new Map<
     string,
     {
@@ -415,9 +448,6 @@ export async function getExerciseProgress(
 // Exercise picker
 // ==========================================
 
-/**
- * Get all active exercises for the analytics exercise picker.
- */
 export async function getAllExercisesForPicker(): Promise<ExercisePickerItem[]> {
   const db = await getDb();
   const result = await db.query(
