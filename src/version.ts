@@ -5,7 +5,7 @@
  * Update this file with each release.
  */
 
-export const APP_VERSION = '0.9.0';
+export const APP_VERSION = '0.10.0';
 
 export interface ChangelogEntry {
   version: string;
@@ -14,6 +14,18 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '0.10.0',
+    date: '2026-03-09',
+    changes: [
+      'Авторизация по email и паролю через Supabase',
+      'Облачная синхронизация данных между устройствами',
+      'Автоматический pull данных из облака при запуске',
+      'Автоматический push после завершения тренировки, импорта и редактирования упражнений',
+      'Кнопка выхода из аккаунта в настройках',
+    ],
+  },
+
   {
     version: '0.9.0',
     date: '2026-03-09',
