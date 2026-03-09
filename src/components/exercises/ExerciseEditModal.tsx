@@ -245,10 +245,10 @@ export function ExerciseEditModal({
           </>
         )}
 
-        {/* Reps parameters */}
-        <div className="grid grid-cols-3 gap-3">
+        {/* Reps parameters — inline layout to avoid overflow */}
+        <div className="space-y-3">
           <NumberStepper
-            label="Макс повт."
+            label="Макс повторений"
             value={maxRepsPerSet}
             onChange={(v) => {
               setMaxRepsPerSet(v);
@@ -259,15 +259,17 @@ export function ExerciseEditModal({
             max={99}
             step={1}
             size="sm"
+            layout="inline"
           />
           <NumberStepper
-            label="Мин повт."
+            label="Мин повторений"
             value={minRepsPerSet}
             onChange={(v) => setMinRepsPerSet(v)}
             min={hasAddedWeight ? 4 : 0}
             max={maxRepsPerSet}
             step={1}
             size="sm"
+            layout="inline"
           />
           <NumberStepper
             label="Подходы"
@@ -277,6 +279,7 @@ export function ExerciseEditModal({
             max={5}
             step={1}
             size="sm"
+            layout="inline"
           />
         </div>
 
