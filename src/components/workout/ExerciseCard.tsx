@@ -66,7 +66,7 @@ export function ExerciseCard({
               </span>
             )}
           </div>
-          <h3 className="text-lg font-bold text-white truncate">{exercise.name}</h3>
+          <h3 className="text-lg font-bold text-white">{exercise.name}</h3>
           <div className="flex items-center gap-3 mt-0.5">
             <span className="text-sm text-[#B0B0B0]">{weightInfo}</span>
             {!isSkipped && totalWorkingSets > 0 && (

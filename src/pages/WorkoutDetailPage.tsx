@@ -2,8 +2,7 @@
 
 /**
  * Workout detail page — shows a past workout session.
- * Reuses the same data loading and rendering logic as WorkoutSummaryPage,
- * but with a "Back" button instead of "Home" button.
+ * Includes delete functionality with confirmation.
  */
 
 import { useEffect, useState, useMemo } from 'react';
@@ -18,6 +17,7 @@ import {
   CircleOff,
   CircleDot,
   ArrowRight,
+  Trash2,
 } from 'lucide-react';
 import { workoutRepo } from '../db';
 import type { WorkoutSession, ExerciseSummary, CardioLog } from '../types';
@@ -31,6 +31,7 @@ import {
 } from '../utils/format';
 import { getDayTypeColor, getDayTypeTextClass, DAY_TYPE_NAMES_RU } from '../theme';
 import { LoadingScreen } from '../components/ui';
+import { ConfirmModal } from '../components/workout';
 
 export function WorkoutDetailPage() {
   const { sessionId } = useParams<{ sessionId: string }>();
@@ -41,6 +42,7 @@ export function WorkoutDetailPage() {
   const [cardioLogs, setCardioLogs] = useState<CardioLog[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   useEffect(() => {
     if (!sessionId) {
@@ -75,6 +77,16 @@ export function WorkoutDetailPage() {
       setError('Ошибка загрузки данных');
     } finally {
       setIsLoading(false);
+    }
+  }
+
+  async function handleDelete() {
+    if (!sessionId) return;
+    try {
+      await workoutRepo.deleteWorkoutSession(sessionId);
+      navigate('/history', { replace: true });
+    } catch (err) {
+      console.error('Failed to delete workout:', err);
     }
   }
 
@@ -174,7 +186,12 @@ export function WorkoutDetailPage() {
               {formatDate(session.date)} · {directionLabel}
             </p>
           </div>
-          <div className="w-10" /> {/* Spacer for centering */}
+          <button
+            onClick={() => setShowDeleteConfirm(true)}
+            className="w-10 h-10 rounded-full bg-[#1E1E1E] flex items-center justify-center active:bg-[#2A2A2A] transition-colors"
+          >
+            <Trash2 size={20} className="text-[#F44336]" />
+          </button>
         </div>
       </div>
 
@@ -298,6 +315,17 @@ export function WorkoutDetailPage() {
           </div>
         </div>
       </div>
+
+      {/* Delete confirmation */}
+      <ConfirmModal
+        isOpen={showDeleteConfirm}
+        title="Удалить тренировку?"
+        message="Тренировка и все её данные будут удалены навсегда."
+        confirmText="Удалить"
+        cancelText="Отмена"
+        onConfirm={handleDelete}
+        onCancel={() => setShowDeleteConfirm(false)}
+      />
     </div>
   );
 }

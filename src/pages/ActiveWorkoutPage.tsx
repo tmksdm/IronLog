@@ -42,6 +42,7 @@ export function ActiveWorkoutPage() {
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
   const [showCancelFinal, setShowCancelFinal] = useState(false);
   const [showSkipConfirm, setShowSkipConfirm] = useState<number | null>(null);
+  const [showFinishConfirm, setShowFinishConfirm] = useState(false);
   const [isFinishModalOpen, setIsFinishModalOpen] = useState(false);
 
   // Refs for scrolling
@@ -111,9 +112,15 @@ export function ActiveWorkoutPage() {
   );
 
   const handleFinishPress = useCallback(() => {
-    recordEndTime(); // Record end time immediately, before modal opens
+    setShowFinishConfirm(true);
+  }, []);
+
+  const handleFinishConfirm = useCallback(() => {
+    setShowFinishConfirm(false);
+    recordEndTime(); // Record end time only after confirmation
     setIsFinishModalOpen(true);
   }, [recordEndTime]);
+
 
   const handleFinishModalClose = useCallback(() => {
     setIsFinishModalOpen(false);
@@ -237,6 +244,18 @@ export function ActiveWorkoutPage() {
         onConfirm={handleCancelFinal}
         onCancel={() => setShowCancelFinal(false)}
       />
+
+      {/* Finish confirmation */}
+      <ConfirmModal
+        isOpen={showFinishConfirm}
+        title="Завершить тренировку?"
+        message="Время тренировки будет зафиксировано."
+        confirmText="Завершить"
+        cancelText="Отмена"
+        onConfirm={handleFinishConfirm}
+        onCancel={() => setShowFinishConfirm(false)}
+      />
+
 
       {/* Skip confirmation */}
       <ConfirmModal

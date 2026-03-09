@@ -3,6 +3,7 @@
 /**
  * A single set row within an exercise card.
  * Shows set number, weight, target reps, actual reps (or stepper), and a complete button.
+ * Warmup rows are visually smaller/subdued compared to working sets.
  */
 
 import { useState } from 'react';
@@ -50,24 +51,12 @@ export function SetRow({
 
   const handleEditToggle = () => {
     if (isSkipped) return;
-    if (!isCompleted) {
-      // If not completed yet, toggle editing mode
-      setIsEditing(!isEditing);
-    } else {
-      // If already completed, toggle to allow correction
-      setIsEditing(!isEditing);
-    }
+    setIsEditing(!isEditing);
   };
 
   const handleRepsChange = (delta: number) => {
     const newReps = Math.max(0, displayReps + delta);
     onUpdateReps(exerciseIndex, setIndex, newReps);
-
-    // If set was already completed, the reps update happens in-place
-    // If not completed and reps changed, auto-complete with new value
-    if (!isCompleted) {
-      onComplete(exerciseIndex, setIndex, newReps);
-    }
   };
 
   const handleConfirmEdit = () => {
@@ -85,16 +74,25 @@ export function SetRow({
     rowBg = isWarmup ? 'bg-green-900/15' : 'bg-green-900/25';
   }
 
+  // Size variants: warmup = smaller, working = normal
+  const rowPy = isWarmup ? 'py-1.5' : 'py-2.5';
+  const labelSize = isWarmup ? 'w-7 h-7 text-xs' : 'w-9 h-9 text-sm';
+  const weightTextSize = isWarmup ? 'text-xs' : 'text-sm';
+  const repsTextSize = isWarmup ? 'text-base' : 'text-lg';
+  const completeBtnSize = isWarmup ? 'w-10 h-10' : 'w-12 h-12';
+  const completeIconSize = isWarmup ? 18 : 22;
+  const checkIconSize = isWarmup ? 14 : 16;
+
   return (
-    <div className={`flex items-center rounded-xl px-3 py-2.5 ${rowBg} gap-2`}>
+    <div className={`flex items-center rounded-xl px-3 ${rowPy} ${rowBg} gap-2`}>
       {/* Set number label */}
       <div className={`
-        w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold shrink-0
+        ${labelSize} rounded-full flex items-center justify-center font-bold shrink-0
         ${isWarmup ? 'bg-[#333] text-[#B0B0B0]' : 'bg-[#2A2A2A] text-white'}
         ${isCompleted && !isSkipped ? 'bg-green-600/30 text-green-400' : ''}
       `}>
         {isCompleted && !isSkipped ? (
-          <Check size={16} className="text-green-400" />
+          <Check size={checkIconSize} className="text-green-400" />
         ) : (
           setLabel
         )}
@@ -102,7 +100,7 @@ export function SetRow({
 
       {/* Weight */}
       {weightDisplay && (
-        <span className={`text-sm min-w-[60px] ${isWarmup ? 'text-[#707070]' : 'text-[#B0B0B0]'}`}>
+        <span className={`${weightTextSize} min-w-[60px] ${isWarmup ? 'text-[#707070]' : 'text-[#B0B0B0]'}`}>
           {weightDisplay}
         </span>
       )}
@@ -146,7 +144,7 @@ export function SetRow({
             {/* Target / actual reps — tappable to edit */}
             <button
               className={`
-                text-lg font-bold min-w-[40px] text-center rounded-lg px-2 py-1
+                ${repsTextSize} font-bold min-w-[40px] text-center rounded-lg px-2 py-1
                 ${isSkipped
                   ? 'text-red-400 line-through'
                   : isCompleted
@@ -155,7 +153,7 @@ export function SetRow({
                       : displayReps > set.targetReps
                         ? 'text-blue-400'
                         : 'text-green-400'
-                    : 'text-white'
+                    : isWarmup ? 'text-[#B0B0B0]' : 'text-white'
                 }
                 ${!isSkipped ? 'active:bg-white/10' : ''}
               `}
@@ -171,12 +169,12 @@ export function SetRow({
             {/* Quick complete button */}
             {!isCompleted && !isSkipped && (
               <button
-                className="w-12 h-12 rounded-full bg-green-600 active:bg-green-700
+                className={`${completeBtnSize} rounded-full bg-green-600 active:bg-green-700
                            flex items-center justify-center shrink-0
-                           shadow-lg shadow-green-900/30"
+                           shadow-lg shadow-green-900/30`}
                 onClick={handleQuickComplete}
               >
-                <Check size={22} className="text-white" />
+                <Check size={completeIconSize} className="text-white" />
               </button>
             )}
           </>
