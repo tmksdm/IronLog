@@ -13,6 +13,7 @@ import {
   updateExercise,
   deactivateExercise,
   reactivateExercise,
+  deleteExercise,  
   getMaxSortOrder,
 } from '../../db/repositories/exerciseRepository';
 import type { Exercise, DayTypeId } from '../../types';
@@ -46,6 +47,7 @@ export function ExerciseEditModal({
   const [numWorkingSets, setNumWorkingSets] = useState(3);
   const [isSaving, setIsSaving] = useState(false);
   const [showDeactivateConfirm, setShowDeactivateConfirm] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   // Initialize form when modal opens or exercise changes
   useEffect(() => {
@@ -74,6 +76,7 @@ export function ExerciseEditModal({
       setNumWorkingSets(3);
     }
     setShowDeactivateConfirm(false);
+    setShowDeleteConfirm(false);
   }, [isOpen, exercise]);
 
   const canSave = name.trim().length > 0;
@@ -152,6 +155,20 @@ export function ExerciseEditModal({
       setIsSaving(false);
     }
   };
+
+  const handleDelete = async () => {
+    if (!exercise) return;
+    setIsSaving(true);
+    try {
+      await deleteExercise(exercise.id);
+      onSaved();
+    } catch (err) {
+      console.error('Failed to delete:', err);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
 
   return (
     <Modal
@@ -332,15 +349,50 @@ export function ExerciseEditModal({
                   </Button>
                 )
               ) : (
-                <Button
-                  variant="secondary"
-                  size="md"
-                  fullWidth
-                  onClick={handleReactivate}
-                  disabled={isSaving}
-                >
-                  Восстановить
-                </Button>
+                <>
+                  <Button
+                    variant="secondary"
+                    size="md"
+                    fullWidth
+                    onClick={handleReactivate}
+                    disabled={isSaving}
+                  >
+                    Восстановить
+                  </Button>
+
+                  {showDeleteConfirm ? (
+                    <div className="flex gap-2">
+                      <Button
+                        variant="danger"
+                        size="md"
+                        fullWidth
+                        onClick={handleDelete}
+                        disabled={isSaving}
+                      >
+                        <Trash2 size={18} />
+                        Да, удалить
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="md"
+                        onClick={() => setShowDeleteConfirm(false)}
+                      >
+                        Нет
+                      </Button>
+                    </div>
+                  ) : (
+                    <Button
+                      variant="ghost"
+                      size="md"
+                      fullWidth
+                      onClick={() => setShowDeleteConfirm(true)}
+                      className="!text-red-400"
+                    >
+                      <Trash2 size={18} />
+                      Удалить навсегда
+                    </Button>
+                  )}
+                </>
               )}
             </>
           )}

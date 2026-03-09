@@ -103,7 +103,7 @@ export function ExerciseEditorPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#121212] pb-8">
+    <div className="min-h-screen bg-[#121212] pb-24">
       {/* Header */}
       <div className="sticky top-0 z-10 bg-[#121212] px-5 pt-4 pb-3">
         <div className="flex items-center gap-3 mb-4">

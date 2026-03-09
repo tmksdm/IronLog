@@ -201,3 +201,17 @@ export async function deactivateExercise(id: string): Promise<void> {
 export async function reactivateExercise(id: string): Promise<void> {
   await updateExercise(id, { isActive: true });
 }
+
+/**
+ * Permanently delete an exercise from the database.
+ * Only use for inactive exercises with no historical data,
+ * or when the user explicitly confirms deletion.
+ */
+export async function deleteExercise(id: string): Promise<void> {
+  const db = await getDb();
+  // Delete any exercise logs referencing this exercise
+  await db.run('DELETE FROM exercise_logs WHERE exercise_id = ?', [id]);
+  // Delete the exercise itself
+  await db.run('DELETE FROM exercises WHERE id = ?', [id]);
+  await saveToStore();
+}
