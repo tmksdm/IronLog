@@ -2,8 +2,6 @@
 
 /**
  * Re-exports all utility modules for convenient imports.
- *
- * Usage: import { distributeReps, roundToStep, formatWeight } from '../utils';
  */
 
 export {
@@ -54,3 +52,16 @@ export {
   formatRepsSum,
   formatDayOfWeek,
 } from './format';
+
+export {
+  buildBackupData,
+  exportAsJSON,
+  exportAsCSV,
+} from './exportData';
+
+export {
+  pickAndParseBackup,
+  parseBackupJSON,
+  restoreFromBackup,
+  type ImportPreview,
+} from './importData';
