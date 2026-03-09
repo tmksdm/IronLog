@@ -16,6 +16,7 @@ import { HistoryPage } from './pages/HistoryPage';
 import { WorkoutDetailPage } from './pages/WorkoutDetailPage';
 import { AnalyticsPage } from './pages/AnalyticsPage';
 import { SettingsPage } from './pages/SettingsPage';
+import { ExerciseEditorPage } from './pages/ExerciseEditorPage';
 
 /** Pages where the bottom nav should be hidden */
 const HIDDEN_NAV_PATHS = ['/workout', '/summary'];
@@ -48,6 +49,7 @@ function AppContent() {
         <Route path="/detail/:sessionId" element={<WorkoutDetailPage />} />
         <Route path="/analytics" element={<AnalyticsPage />} />
         <Route path="/settings" element={<SettingsPage />} />
+        <Route path="/exercises" element={<ExerciseEditorPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
 
