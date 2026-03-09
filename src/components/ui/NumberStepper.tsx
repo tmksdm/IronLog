@@ -9,6 +9,8 @@ interface NumberStepperProps {
   min?: number;
   max?: number;
   step?: number;
+  /** Step for manual input snapping (defaults to step). Use smaller value to allow finer manual entry. */
+  inputStep?: number;  
   /** Label above the stepper (or to the left in 'inline' layout) */
   label?: string;
   /** Units label (e.g. "кг") */
@@ -32,6 +34,7 @@ export function NumberStepper({
   min = 0,
   max = 999,
   step = 1,
+  inputStep,  
   label,
   unit,
   formatValue,
@@ -72,8 +75,8 @@ export function NumberStepper({
     const parsed = parseFloat(raw);
     if (isNaN(parsed)) return; // invalid input — keep old value
 
-    // Snap to step grid and clamp
-    const snapped = Math.round(parsed / step) * step;
+    const snapTo = inputStep ?? step;
+    const snapped = Math.round(parsed / snapTo) * snapTo;
     // Round to avoid floating point drift (e.g. 2.5000000001)
     const rounded = Math.round(snapped * 1000) / 1000;
     const clamped = Math.min(max, Math.max(min, rounded));

@@ -75,6 +75,7 @@ export function StartWorkoutModal({
             min={30}
             max={250}
             step={0.25}
+            inputStep={0.01}            
             label="Вес до тренировки"
             unit="кг"
             formatValue={(v) => formatDecimal(v)}
