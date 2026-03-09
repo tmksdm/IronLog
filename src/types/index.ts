@@ -148,6 +148,12 @@ export interface MonthlyBodyWeight {
   measurementCount: number;
 }
 
+export interface YearlyBodyWeight {
+  year: number;
+  avgWeight: number;
+  measurementCount: number;
+}
+
 export interface MonthlyDuration {
   year: number;
   month: number;

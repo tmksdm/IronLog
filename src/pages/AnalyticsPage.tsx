@@ -28,8 +28,8 @@ import { colors, getDayTypeColor } from '../theme';
 import {
   getMonthlyTonnage,
   getYearlyTonnage,
-  getBodyWeightTrend,
   getMonthlyBodyWeight,
+  getYearlyBodyWeight,
   getMonthlyDuration,
   getMonthlyRunTime,
   getExerciseProgress,
@@ -46,8 +46,8 @@ import type {
   DayTypeId,
   MonthlyTonnage,
   YearlyTonnage,
-  BodyWeightDataPoint,
   MonthlyBodyWeight,
+  YearlyBodyWeight,
   MonthlyDuration,
   MonthlyRunTime,
   ExerciseProgressPoint,
@@ -85,17 +85,17 @@ const DAY_TYPE_FILTERS: { key: DayTypeFilter; label: string }[] = [
 // Helpers for 12-month / 12-year slot filling
 // ==========================================
 
+const MONTH_NAMES = [
+  'Янв', 'Фев', 'Мар', 'Апр', 'Май', 'Июн',
+  'Июл', 'Авг', 'Сен', 'Окт', 'Ноя', 'Дек',
+];
+
 function buildLast12Months(
   data: MonthlyTonnage[]
 ): { label: string; value: number; fullLabel: string }[] {
   const now = new Date();
   const currentYear = now.getFullYear();
   const currentMonth = now.getMonth() + 1;
-
-  const MONTH_NAMES = [
-    'Янв', 'Фев', 'Мар', 'Апр', 'Май', 'Июн',
-    'Июл', 'Авг', 'Сен', 'Окт', 'Ноя', 'Дек',
-  ];
 
   const dataMap = new Map<string, number>();
   for (const d of data) {
@@ -144,14 +144,101 @@ function buildLast12Years(
   return result;
 }
 
+/**
+ * Build 12-month chart data for body weight (similar to tonnage).
+ * Months without data get value = null (rendered as gaps in chart).
+ */
+function buildLast12MonthsBodyWeight(
+  data: MonthlyBodyWeight[]
+): { label: string; value: number | null; fullLabel: string }[] {
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const currentMonth = now.getMonth() + 1;
+
+  const dataMap = new Map<string, number>();
+  for (const d of data) {
+    dataMap.set(`${d.year}-${d.month}`, d.avgWeight);
+  }
+
+  const result: { label: string; value: number | null; fullLabel: string }[] = [];
+  for (let i = 11; i >= 0; i--) {
+    let m = currentMonth - i;
+    let y = currentYear;
+    while (m <= 0) {
+      m += 12;
+      y -= 1;
+    }
+    const key = `${y}-${m}`;
+    result.push({
+      label: m.toString().padStart(2, '0'),
+      value: dataMap.has(key) ? dataMap.get(key)! : null,
+      fullLabel: `${MONTH_NAMES[m - 1]} ${y}`,
+    });
+  }
+
+  return result;
+}
+
+/**
+ * Build 12-year chart data for body weight.
+ */
+function buildLast12YearsBodyWeight(
+  data: YearlyBodyWeight[]
+): { label: string; value: number | null; fullLabel: string }[] {
+  const now = new Date();
+  const currentYear = now.getFullYear();
+
+  const dataMap = new Map<number, number>();
+  for (const d of data) {
+    dataMap.set(d.year, d.avgWeight);
+  }
+
+  const result: { label: string; value: number | null; fullLabel: string }[] = [];
+  for (let i = 11; i >= 0; i--) {
+    const y = currentYear - i;
+    result.push({
+      label: y.toString().slice(2),
+      value: dataMap.has(y) ? dataMap.get(y)! : null,
+      fullLabel: y.toString(),
+    });
+  }
+
+  return result;
+}
+
 // ==========================================
 // Shared chart components
 // ==========================================
 
 interface ChartDataPoint {
   label: string;
-  value: number;
+  value: number | null;
   fullLabel?: string;
+}
+
+/**
+ * Compute nice Y-axis domain from data.
+ * If autoYDomain is true, uses [min - padding, max + padding] instead of [0, auto].
+ */
+function computeYDomain(
+  data: ChartDataPoint[],
+  autoYDomain: boolean
+): [number | string, number | string] {
+  if (!autoYDomain) return [0, 'auto'];
+
+  const values = data.map((d) => d.value).filter((v): v is number => v !== null && v > 0);
+  if (values.length === 0) return [0, 'auto'];
+
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const range = max - min;
+
+  // Add ~10% padding, round to nice numbers
+  const padding = range > 0 ? range * 0.15 : 2;
+  const yMin = Math.floor((min - padding) * 2) / 2; // round down to 0.5
+  const yMax = Math.ceil((max + padding) * 2) / 2;  // round up to 0.5
+
+  return [Math.max(0, yMin), yMax];
 }
 
 function AnalyticsChart({
@@ -160,19 +247,25 @@ function AnalyticsChart({
   yAxisSuffix = '',
   formatValue,
   height = 200,
+  autoYDomain = false,
+  connectNulls = true,
 }: {
   data: ChartDataPoint[];
   lineColor: string;
   yAxisSuffix?: string;
   formatValue?: (v: number) => string;
   height?: number;
+  autoYDomain?: boolean;
+  connectNulls?: boolean;
 }) {
   if (data.length === 0) return null;
 
-  const hasData = data.some((d) => d.value > 0);
+  const hasData = data.some((d) => d.value !== null && d.value > 0);
   if (!hasData) return null;
 
   const formatTooltipValue = formatValue ?? ((v: number) => `${Math.round(v)}${yAxisSuffix}`);
+
+  const yDomain = computeYDomain(data, autoYDomain);
 
   return (
     <Card className="!p-0 overflow-hidden">
@@ -192,6 +285,7 @@ function AnalyticsChart({
             axisLine={false}
             tickLine={false}
             width={44}
+            domain={yDomain}
             tickFormatter={(v) => `${Math.round(v)}`}
           />
           <Tooltip
@@ -216,6 +310,7 @@ function AnalyticsChart({
             strokeWidth={2}
             dot={{ r: 3, fill: lineColor, strokeWidth: 0 }}
             activeDot={{ r: 5, fill: lineColor, strokeWidth: 2, stroke: colors.background }}
+            connectNulls={connectNulls}
           />
         </LineChart>
       </ResponsiveContainer>
@@ -406,61 +501,79 @@ function TonnageTab() {
 // ==========================================
 
 function BodyWeightTab() {
-  const [trend, setTrend] = useState<BodyWeightDataPoint[]>([]);
   const [monthly, setMonthly] = useState<MonthlyBodyWeight[]>([]);
+  const [yearly, setYearly] = useState<YearlyBodyWeight[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    Promise.all([getBodyWeightTrend(), getMonthlyBodyWeight()])
-      .then(([t, m]) => {
-        setTrend(t);
+    Promise.all([getMonthlyBodyWeight(), getYearlyBodyWeight()])
+      .then(([m, y]) => {
         setMonthly(m);
+        setYearly(y);
       })
       .finally(() => setLoading(false));
   }, []);
 
   if (loading) return <LoadingSpinner />;
 
-  // For the trend chart, thin out labels to max ~12
-  const trendChartData: ChartDataPoint[] = trend.map((p) => ({
-    label: formatDateShort(p.date),
-    value: p.avgWeight,
-    fullLabel: formatDateShort(p.date),
-  }));
-
-  // Sparse labels for readability
-  const sparsedTrend = sparseLabels(trendChartData, 8);
+  const monthly12 = buildLast12MonthsBodyWeight(monthly);
+  const yearly12 = buildLast12YearsBodyWeight(yearly);
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex flex-col gap-3">
-        <h3 className="text-base font-bold text-white">Динамика веса</h3>
-        {trend.length < 2 ? (
-          <EmptyState message="Нужно минимум 2 измерения для графика" />
-        ) : (
-          <AnalyticsChart
-            data={sparsedTrend}
-            lineColor={colors.secondary}
-            formatValue={(v) => `${formatDecimal(v)} кг`}
-          />
-        )}
-      </div>
-
+      {/* Monthly averages */}
       <div className="flex flex-col gap-3">
         <h3 className="text-base font-bold text-white">Среднее за месяц</h3>
         {monthly.length === 0 ? (
           <EmptyState message="Нет данных о весе тела" />
         ) : (
-          <StatTable
-            rows={monthly
-              .slice()
-              .reverse()
-              .map((m) => ({
-                label: m.label,
-                value: `${formatDecimal(m.avgWeight)} кг`,
-                sub: `${m.measurementCount} измер.`,
-              }))}
-          />
+          <>
+            <AnalyticsChart
+              data={monthly12}
+              lineColor={colors.secondary}
+              formatValue={(v) => `${formatDecimal(v)} кг`}
+              autoYDomain
+              connectNulls
+            />
+            <StatTable
+              rows={monthly
+                .slice()
+                .reverse()
+                .map((m) => ({
+                  label: m.label,
+                  value: `${formatDecimal(m.avgWeight)} кг`,
+                  sub: `${m.measurementCount} измер.`,
+                }))}
+            />
+          </>
+        )}
+      </div>
+
+      {/* Yearly averages */}
+      <div className="flex flex-col gap-3">
+        <h3 className="text-base font-bold text-white">Среднее за год</h3>
+        {yearly.length === 0 ? (
+          <EmptyState message="Нет данных о весе тела" />
+        ) : (
+          <>
+            <AnalyticsChart
+              data={yearly12}
+              lineColor={colors.secondary}
+              formatValue={(v) => `${formatDecimal(v)} кг`}
+              autoYDomain
+              connectNulls
+            />
+            <StatTable
+              rows={yearly
+                .slice()
+                .reverse()
+                .map((y) => ({
+                  label: `${y.year}`,
+                  value: `${formatDecimal(y.avgWeight)} кг`,
+                  sub: `${y.measurementCount} измер.`,
+                }))}
+            />
+          </>
         )}
       </div>
     </div>
@@ -716,10 +829,11 @@ function ExerciseTab() {
                       data={weightSparsed}
                       lineColor={selectedColor}
                       formatValue={(v) => `${formatDecimal(v)} кг`}
+                      autoYDomain
                     />
                   ) : (
                     <SingleStatCard
-                      value={`${formatDecimal(weightPoints[0]!.value)} кг`}
+                      value={`${formatDecimal(weightPoints[0]!.value!)} кг`}
                     />
                   )}
                 </div>

@@ -10,6 +10,7 @@ import type {
   YearlyTonnage,
   BodyWeightDataPoint,
   MonthlyBodyWeight,
+  YearlyBodyWeight,
   MonthlyDuration,
   MonthlyRunTime,
   ExerciseProgressPoint,
@@ -211,6 +212,47 @@ export async function getMonthlyBodyWeight(): Promise<MonthlyBodyWeight[]> {
     measurementCount: row.measurement_count,
   }));
 }
+
+/**
+ * Get average body weight per year (average of monthly averages).
+ */
+export async function getYearlyBodyWeight(): Promise<YearlyBodyWeight[]> {
+  const db = await getDb();
+
+  const result = await db.query(
+    `SELECT
+       year,
+       AVG(monthly_avg) as avg_weight,
+       SUM(cnt) as measurement_count
+     FROM (
+       SELECT
+         CAST(strftime('%Y', date) AS INTEGER) as year,
+         CAST(strftime('%m', date) AS INTEGER) as month,
+         AVG(
+           CASE
+             WHEN weight_before IS NOT NULL AND weight_after IS NOT NULL
+               THEN (weight_before + weight_after) / 2.0
+             WHEN weight_before IS NOT NULL THEN weight_before
+             ELSE weight_after
+           END
+         ) as monthly_avg,
+         COUNT(*) as cnt
+       FROM workout_sessions
+       WHERE time_end IS NOT NULL
+         AND (weight_before IS NOT NULL OR weight_after IS NOT NULL)
+       GROUP BY year, month
+     )
+     GROUP BY year
+     ORDER BY year ASC`
+  );
+
+  return (result.values ?? []).map((row: any) => ({
+    year: row.year,
+    avgWeight: Math.round(row.avg_weight * 100) / 100,
+    measurementCount: row.measurement_count,
+  }));
+}
+
 
 // ==========================================
 // Duration
