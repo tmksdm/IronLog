@@ -251,6 +251,7 @@ function TreadmillInput({ onNext }: { onNext: () => void }) {
           <input
             type="number"
             inputMode="numeric"
+            onFocus={(e) => e.target.select()}
             value={minutes.toString().padStart(2, '0')}
             onChange={(e) => {
               const val = parseInt(e.target.value, 10);
@@ -280,6 +281,7 @@ function TreadmillInput({ onNext }: { onNext: () => void }) {
           <input
             type="number"
             inputMode="numeric"
+            onFocus={(e) => e.target.select()}
             value={seconds.toString().padStart(2, '0')}
             onChange={(e) => {
               const val = parseInt(e.target.value, 10);

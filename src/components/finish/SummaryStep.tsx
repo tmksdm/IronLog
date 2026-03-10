@@ -203,6 +203,7 @@ export default function SummaryStep({ onFinish, onBack, isSaving }: SummaryStepP
             <input
               type="text"
               inputMode="decimal"
+              onFocus={(e) => e.target.select()}
               value={weightAfter}
               onChange={(e) => setWeightAfter(e.target.value)}
               placeholder="0"

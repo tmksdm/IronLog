@@ -16,8 +16,8 @@ import { useWorkoutStore } from '../../stores/workoutStore';
 import { colors } from '../../theme';
 
 // SVG ring constants
-const RING_SIZE = 220;
-const RING_STROKE = 8;
+const RING_SIZE = 240;
+const RING_STROKE = 12;
 const RING_RADIUS = (RING_SIZE - RING_STROKE) / 2;
 const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS;
 
@@ -120,7 +120,7 @@ export function RestTimer() {
 
           {/* Seconds display */}
           <div className="absolute inset-0 flex items-center justify-center">
-            <span className="text-6xl font-bold text-white font-mono">
+            <span className="text-8xl font-bold text-white font-mono">
               {seconds}
             </span>
           </div>
