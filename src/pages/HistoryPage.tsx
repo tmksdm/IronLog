@@ -3,6 +3,7 @@
 /**
  * Workout history page.
  * Lists all completed workout sessions with filtering by day type.
+ * Supports selection mode for batch deletion.
  */
 
 import { useState, useEffect, useCallback } from 'react';
@@ -14,6 +15,11 @@ import {
   Scale,
   ChevronRight,
   Loader2,
+  Trash2,
+  X,
+  CheckSquare,
+  Square,
+  Minus,
 } from 'lucide-react';
 import { workoutRepo } from '../db';
 import type { WorkoutSession } from '../types';
@@ -24,6 +30,7 @@ import {
   formatDecimal,
 } from '../utils/format';
 import { getDayTypeColor, DAY_TYPE_NAMES_RU } from '../theme';
+import { ConfirmModal } from '../components/workout';
 
 // Filter options
 type FilterOption = 'all' | 1 | 2 | 3;
@@ -40,6 +47,15 @@ export function HistoryPage() {
   const [sessions, setSessions] = useState<WorkoutSession[]>([]);
   const [filter, setFilter] = useState<FilterOption>('all');
   const [isLoading, setIsLoading] = useState(true);
+
+  // Selection mode state
+  const [isSelecting, setIsSelecting] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
+  // Delete confirmation
+  const [deleteConfirm, setDeleteConfirm] = useState<{
+    type: 'selected' | 'all';
+  } | null>(null);
 
   const loadSessions = useCallback(async () => {
     setIsLoading(true);
@@ -68,15 +84,153 @@ export function HistoryPage() {
   // Group sessions by month (e.g., "Март 2026")
   const grouped = groupByMonth(filteredSessions);
 
+  // --- Selection handlers ---
+
+  function enterSelectionMode() {
+    setIsSelecting(true);
+    setSelectedIds(new Set());
+  }
+
+  function exitSelectionMode() {
+    setIsSelecting(false);
+    setSelectedIds(new Set());
+  }
+
+  function toggleSession(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  }
+
+  function toggleSelectAll() {
+    const filteredIds = filteredSessions.map((s) => s.id);
+    const allSelected = filteredIds.length > 0 && filteredIds.every((id) => selectedIds.has(id));
+
+    if (allSelected) {
+      // Deselect all filtered
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        for (const id of filteredIds) {
+          next.delete(id);
+        }
+        return next;
+      });
+    } else {
+      // Select all filtered
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        for (const id of filteredIds) {
+          next.add(id);
+        }
+        return next;
+      });
+    }
+  }
+
+  async function handleDeleteSelected() {
+    const ids = Array.from(selectedIds);
+    if (ids.length === 0) return;
+    try {
+      await workoutRepo.deleteMultipleSessions(ids);
+      setDeleteConfirm(null);
+      exitSelectionMode();
+      await loadSessions();
+    } catch (err) {
+      console.error('Failed to delete sessions:', err);
+    }
+  }
+
+  async function handleDeleteAll() {
+    try {
+      await workoutRepo.deleteAllSessions();
+      setDeleteConfirm(null);
+      exitSelectionMode();
+      await loadSessions();
+    } catch (err) {
+      console.error('Failed to delete all sessions:', err);
+    }
+  }
+
+  // Count selected among currently visible (filtered) sessions
+  const selectedInFilterCount = filteredSessions.filter((s) =>
+    selectedIds.has(s.id)
+  ).length;
+
+  const allFilteredSelected =
+    filteredSessions.length > 0 &&
+    filteredSessions.every((s) => selectedIds.has(s.id));
+
+  const someFilteredSelected =
+    selectedInFilterCount > 0 && !allFilteredSelected;
+
   return (
     <div className="flex flex-col min-h-screen bg-[#121212] pb-20">
       {/* Header */}
       <header className="px-5 pt-6 pb-3">
-        <h1 className="text-2xl font-bold text-white">История</h1>
-        <p className="text-sm text-[#B0B0B0] mt-0.5">
-          {filteredSessions.length}{' '}
-          {pluralize(filteredSessions.length, 'тренировка', 'тренировки', 'тренировок')}
-        </p>
+        <div className="flex items-center justify-between">
+          {isSelecting ? (
+            <>
+              <button
+                onClick={exitSelectionMode}
+                className="w-10 h-10 rounded-full bg-[#1E1E1E] flex items-center justify-center
+                           active:bg-[#2A2A2A] transition-colors"
+              >
+                <X size={20} className="text-[#B0B0B0]" />
+              </button>
+              <span className="text-lg font-bold text-white">
+                {selectedIds.size > 0
+                  ? `Выбрано: ${selectedIds.size}`
+                  : 'Выберите тренировки'}
+              </span>
+              {/* Select all / deselect all */}
+              <button
+                onClick={toggleSelectAll}
+                className="w-10 h-10 rounded-full bg-[#1E1E1E] flex items-center justify-center
+                           active:bg-[#2A2A2A] transition-colors"
+                title={allFilteredSelected ? 'Снять выделение' : 'Выбрать все'}
+              >
+                {allFilteredSelected ? (
+                  <CheckSquare size={20} className="text-[#4CAF50]" />
+                ) : someFilteredSelected ? (
+                  <Minus size={20} className="text-[#FF9800]" />
+                ) : (
+                  <Square size={20} className="text-[#B0B0B0]" />
+                )}
+              </button>
+            </>
+          ) : (
+            <>
+              <div>
+                <h1 className="text-2xl font-bold text-white">История</h1>
+                <p className="text-sm text-[#B0B0B0] mt-0.5">
+                  {filteredSessions.length}{' '}
+                  {pluralize(
+                    filteredSessions.length,
+                    'тренировка',
+                    'тренировки',
+                    'тренировок'
+                  )}
+                </p>
+              </div>
+              {/* Enter selection mode — only show when there are sessions */}
+              {sessions.length > 0 && (
+                <button
+                  onClick={enterSelectionMode}
+                  className="w-10 h-10 rounded-full bg-[#1E1E1E] flex items-center justify-center
+                             active:bg-[#2A2A2A] transition-colors"
+                >
+                  <Trash2 size={20} className="text-[#B0B0B0]" />
+                </button>
+              )}
+            </>
+          )}
+        </div>
       </header>
 
       {/* Filter tabs */}
@@ -95,9 +249,10 @@ export function HistoryPage() {
                 onClick={() => setFilter(opt.value)}
                 className={`
                   px-3.5 py-1.5 rounded-lg text-sm font-medium transition-colors select-none
-                  ${isActive
-                    ? 'text-white'
-                    : 'bg-[#1E1E1E] text-[#B0B0B0] active:bg-[#2A2A2A]'
+                  ${
+                    isActive
+                      ? 'text-white'
+                      : 'bg-[#1E1E1E] text-[#B0B0B0] active:bg-[#2A2A2A]'
                   }
                 `}
                 style={
@@ -141,9 +296,16 @@ export function HistoryPage() {
                     <SessionCard
                       key={session.id}
                       session={session}
-                      onClick={() =>
-                        navigate(`/detail/${session.id}`)
-                      }
+                      isSelecting={isSelecting}
+                      isSelected={selectedIds.has(session.id)}
+                      onToggle={() => toggleSession(session.id)}
+                      onClick={() => {
+                        if (isSelecting) {
+                          toggleSession(session.id);
+                        } else {
+                          navigate(`/detail/${session.id}`);
+                        }
+                      }}
                     />
                   ))}
                 </div>
@@ -152,6 +314,72 @@ export function HistoryPage() {
           </div>
         )}
       </div>
+
+      {/* Bottom action bar — visible only in selection mode with selections */}
+      {isSelecting && (
+        <div
+          className="fixed bottom-16 left-0 right-0 z-30 px-5 pb-3 pt-3
+                     bg-gradient-to-t from-[#121212] via-[#121212] to-transparent"
+        >
+          <div className="flex gap-3 max-w-[480px] mx-auto">
+            <button
+              onClick={() => setDeleteConfirm({ type: 'all' })}
+              className="flex-1 py-3 rounded-xl bg-[#1E1E1E] border border-[#F44336]/40
+                         text-[#F44336] font-semibold text-sm
+                         active:bg-[#F44336]/10 transition-colors"
+            >
+              Удалить все ({sessions.length})
+            </button>
+            <button
+              onClick={() => {
+                if (selectedIds.size > 0) {
+                  setDeleteConfirm({ type: 'selected' });
+                }
+              }}
+              disabled={selectedIds.size === 0}
+              className={`flex-1 py-3 rounded-xl font-semibold text-sm transition-colors
+                ${
+                  selectedIds.size > 0
+                    ? 'bg-[#F44336] text-white active:bg-[#D32F2F]'
+                    : 'bg-[#F44336]/20 text-[#F44336]/40 pointer-events-none'
+                }`}
+            >
+              Удалить ({selectedIds.size})
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Delete confirmation modals */}
+      <ConfirmModal
+        isOpen={deleteConfirm?.type === 'selected'}
+        title="Удалить выбранные?"
+        message={`${selectedIds.size} ${pluralize(
+          selectedIds.size,
+          'тренировка будет удалена',
+          'тренировки будут удалены',
+          'тренировок будут удалены'
+        )} навсегда вместе со всеми данными.`}
+        confirmText="Удалить"
+        cancelText="Отмена"
+        onConfirm={handleDeleteSelected}
+        onCancel={() => setDeleteConfirm(null)}
+      />
+
+      <ConfirmModal
+        isOpen={deleteConfirm?.type === 'all'}
+        title="Удалить ВСЕ тренировки?"
+        message={`Все ${sessions.length} ${pluralize(
+          sessions.length,
+          'тренировка будет удалена',
+          'тренировки будут удалены',
+          'тренировок будут удалены'
+        )} навсегда. Это действие нельзя отменить.`}
+        confirmText="Удалить все"
+        cancelText="Отмена"
+        onConfirm={handleDeleteAll}
+        onCancel={() => setDeleteConfirm(null)}
+      />
     </div>
   );
 }
@@ -162,10 +390,19 @@ export function HistoryPage() {
 
 interface SessionCardProps {
   session: WorkoutSession;
+  isSelecting: boolean;
+  isSelected: boolean;
+  onToggle: () => void;
   onClick: () => void;
 }
 
-function SessionCard({ session, onClick }: SessionCardProps) {
+function SessionCard({
+  session,
+  isSelecting,
+  isSelected,
+  onToggle,
+  onClick,
+}: SessionCardProps) {
   const accentColor = getDayTypeColor(session.dayTypeId);
   const dayName = DAY_TYPE_NAMES_RU[session.dayTypeId] ?? '';
   const directionLabel = session.direction === 'normal' ? '→' : '←';
@@ -183,14 +420,31 @@ function SessionCard({ session, onClick }: SessionCardProps) {
   return (
     <button
       onClick={onClick}
-      className="w-full bg-[#252525] rounded-xl p-3.5 flex items-center gap-3
-                 active:bg-[#2A2A2A] transition-colors text-left"
+      className={`w-full bg-[#252525] rounded-xl p-3.5 flex items-center gap-3
+                  active:bg-[#2A2A2A] transition-colors text-left
+                  ${isSelected ? 'ring-2 ring-[#F44336]/60' : ''}`}
     >
-      {/* Day type accent bar */}
-      <div
-        className="w-1 self-stretch rounded-full shrink-0"
-        style={{ backgroundColor: accentColor }}
-      />
+      {/* Checkbox in selection mode, otherwise accent bar */}
+      {isSelecting ? (
+        <div
+          className="shrink-0 w-6 h-6 rounded flex items-center justify-center"
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggle();
+          }}
+        >
+          {isSelected ? (
+            <CheckSquare size={22} className="text-[#F44336]" />
+          ) : (
+            <Square size={22} className="text-[#555555]" />
+          )}
+        </div>
+      ) : (
+        <div
+          className="w-1 self-stretch rounded-full shrink-0"
+          style={{ backgroundColor: accentColor }}
+        />
+      )}
 
       {/* Main content */}
       <div className="flex-1 min-w-0">
@@ -228,8 +482,10 @@ function SessionCard({ session, onClick }: SessionCardProps) {
         </div>
       </div>
 
-      {/* Chevron */}
-      <ChevronRight size={18} className="text-[#555555] shrink-0" />
+      {/* Chevron (only in normal mode) */}
+      {!isSelecting && (
+        <ChevronRight size={18} className="text-[#555555] shrink-0" />
+      )}
     </button>
   );
 }
@@ -239,8 +495,18 @@ function SessionCard({ session, onClick }: SessionCardProps) {
 // ==========================================
 
 const MONTH_NAMES_FULL = [
-  'Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь',
-  'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь',
+  'Январь',
+  'Февраль',
+  'Март',
+  'Апрель',
+  'Май',
+  'Июнь',
+  'Июль',
+  'Август',
+  'Сентябрь',
+  'Октябрь',
+  'Ноябрь',
+  'Декабрь',
 ];
 
 interface MonthGroup {

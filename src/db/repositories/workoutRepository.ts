@@ -209,6 +209,38 @@ export async function deleteWorkoutSession(sessionId: string): Promise<void> {
   );
 }
 
+/**
+ * Delete multiple workout sessions and all related logs.
+ */
+export async function deleteMultipleSessions(sessionIds: string[]): Promise<void> {
+  if (sessionIds.length === 0) return;
+  const db = await getDb();
+  const placeholders = sessionIds.map(() => '?').join(',');
+
+  await db.run(`DELETE FROM cardio_logs WHERE workout_session_id IN (${placeholders})`, sessionIds);
+  await db.run(`DELETE FROM exercise_logs WHERE workout_session_id IN (${placeholders})`, sessionIds);
+  await db.run(`DELETE FROM workout_sessions WHERE id IN (${placeholders})`, sessionIds);
+  await saveToStore();
+
+  // Sync deletions to cloud
+  for (const id of sessionIds) {
+    deleteSessionFromCloud(id).catch((err) =>
+      console.error('Cloud sync after session delete failed:', err)
+    );
+  }
+}
+
+/**
+ * Delete ALL workout sessions and all related logs.
+ */
+export async function deleteAllSessions(): Promise<void> {
+  const db = await getDb();
+  await db.run('DELETE FROM cardio_logs');
+  await db.run('DELETE FROM exercise_logs');
+  await db.run('DELETE FROM workout_sessions');
+  await saveToStore();
+}
+
 // ==========================================
 // Exercise Logs
 // ==========================================
