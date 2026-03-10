@@ -19,7 +19,7 @@ import {
   LogOut,  
 } from 'lucide-react';
 import { Card } from '../components/ui';
-import { ImportPreviewModal } from '../components/settings';
+import { ImportPreviewModal, GymCostCalculator } from '../components/settings';
 import { exportAsJSON, exportAsCSV, pickAndParseBackup, restoreFromBackup } from '../utils';
 import type { ImportPreview } from '../utils';
 import { useAppStore } from '../stores/appStore';
@@ -284,6 +284,11 @@ export function SettingsPage() {
             sublabel="Добавить, изменить, порядок, вес"
             onClick={() => navigate('/exercises')}
           />
+        </Section>
+
+        {/* Gym cost calculator */}
+        <Section title="Абонемент">
+          <GymCostCalculator />
         </Section>
 
         {/* Export */}

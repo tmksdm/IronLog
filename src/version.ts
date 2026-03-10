@@ -5,7 +5,7 @@
  * Update this file with each release.
  */
 
-export const APP_VERSION = '0.11.0';
+export const APP_VERSION = '0.11.1';
 
 export interface ChangelogEntry {
   version: string;
@@ -15,6 +15,14 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '0.11.1',
+    date: '2026-03-10',
+    changes: [
+      'Калькулятор стоимости абонемента в настройках (цена, срок, кол-во в неделю → стоимость за тренировку)',
+      'Показывает фактическую стоимость на основе реальной истории тренировок',
+    ],
+  },
+    {
     version: '0.11.0',
     date: '2026-03-10',
     changes: [

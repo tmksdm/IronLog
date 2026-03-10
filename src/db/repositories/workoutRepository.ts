@@ -241,6 +241,23 @@ export async function deleteAllSessions(): Promise<void> {
   await saveToStore();
 }
 
+/**
+ * Count workout sessions within a date range (inclusive).
+ * Used for gym cost calculator.
+ */
+export async function countSessionsInRange(
+  startISO: string,
+  endISO: string
+): Promise<number> {
+  const db = await getDb();
+  const result = await db.query(
+    `SELECT COUNT(*) as cnt FROM workout_sessions
+     WHERE date >= ? AND date <= ?`,
+    [startISO, endISO]
+  );
+  return result.values?.[0]?.cnt ?? 0;
+}
+
 // ==========================================
 // Exercise Logs
 // ==========================================
