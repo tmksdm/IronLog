@@ -63,7 +63,7 @@ function calculateTonnage(exercises: ActiveExercise[]): number {
   for (const ex of exercises) {
     if (ex.status === 'skipped') continue;
     for (const s of ex.sets) {
-      if (s.isCompleted && s.weight > 0) {
+      if (s.isCompleted && s.weight > 0 && s.setType === 'working') {
         total += s.weight * (s.actualReps ?? 0);
       }
     }

@@ -422,7 +422,7 @@ export async function getExerciseProgress(
       }
     }
 
-    if (row.weight > 0 && row.actual_reps > 0) {
+    if (row.set_type === 'working' && row.weight > 0 && row.actual_reps > 0) {
       entry.totalKg += row.weight * row.actual_reps;
     }
   }

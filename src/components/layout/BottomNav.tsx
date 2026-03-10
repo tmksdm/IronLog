@@ -3,6 +3,7 @@
 /**
  * Bottom navigation tab bar.
  * Shown on all pages except ActiveWorkoutPage.
+ * Tapping the active tab dispatches a custom event to scroll to top.
  */
 
 import { useLocation, useNavigate } from 'react-router-dom';
@@ -39,7 +40,7 @@ const NAV_ITEMS: NavItem[] = [
     path: '/settings',
     label: 'Настройки',
     icon: <Settings size={22} />,
-    matchPaths: ['/settings'],
+    matchPaths: ['/settings', '/exercises'],
   },
 ];
 
@@ -54,6 +55,19 @@ export function BottomNav() {
     });
   };
 
+  const isExactPage = (item: NavItem): boolean => {
+    return location.pathname === item.path;
+  };
+
+  const handleTap = (item: NavItem) => {
+    if (isExactPage(item)) {
+      // Already on this exact page — scroll to top
+      window.dispatchEvent(new CustomEvent('nav-tap-active', { detail: item.path }));
+    } else {
+      navigate(item.path);
+    }
+  };
+
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-30 bg-[#1E1E1E] border-t border-[#333333]">
       <div className="mx-auto max-w-[480px] flex items-stretch">
@@ -62,7 +76,7 @@ export function BottomNav() {
           return (
             <button
               key={item.path}
-              onClick={() => navigate(item.path)}
+              onClick={() => handleTap(item)}
               className={`
                 flex-1 flex flex-col items-center justify-center gap-0.5 py-2 pt-2.5
                 transition-colors select-none

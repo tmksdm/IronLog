@@ -4,9 +4,11 @@
  * Workout history page.
  * Lists all completed workout sessions with filtering by day type.
  * Supports selection mode for batch deletion.
+ * Preserves scroll position and filter when navigating back from detail.
+ * Loads sessions in pages of PAGE_SIZE for performance.
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Calendar,
@@ -20,6 +22,7 @@ import {
   CheckSquare,
   Square,
   Minus,
+  ChevronDown,
 } from 'lucide-react';
 import { workoutRepo } from '../db';
 import type { WorkoutSession } from '../types';
@@ -42,11 +45,35 @@ const FILTER_OPTIONS: { value: FilterOption; label: string }[] = [
   { value: 3, label: 'Жим' },
 ];
 
+// Pagination
+const PAGE_SIZE = 30;
+
+// sessionStorage keys
+const FILTER_STORAGE_KEY = 'history_filter';
+const LAST_VIEWED_SESSION_KEY = 'history_last_viewed_session';
+const VISIBLE_COUNT_KEY = 'history_visible_count';
+
 export function HistoryPage() {
   const navigate = useNavigate();
   const [sessions, setSessions] = useState<WorkoutSession[]>([]);
-  const [filter, setFilter] = useState<FilterOption>('all');
   const [isLoading, setIsLoading] = useState(true);
+
+  // Restore filter from sessionStorage
+  const [filter, setFilter] = useState<FilterOption>(() => {
+    const saved = sessionStorage.getItem(FILTER_STORAGE_KEY);
+    if (saved === '1' || saved === '2' || saved === '3') return parseInt(saved) as 1 | 2 | 3;
+    return 'all';
+  });
+
+  // How many filtered sessions to show
+  const [visibleCount, setVisibleCount] = useState<number>(() => {
+    const saved = sessionStorage.getItem(VISIBLE_COUNT_KEY);
+    if (saved) {
+      const n = parseInt(saved, 10);
+      if (!isNaN(n) && n > 0) return n;
+    }
+    return PAGE_SIZE;
+  });
 
   // Selection mode state
   const [isSelecting, setIsSelecting] = useState(false);
@@ -57,11 +84,15 @@ export function HistoryPage() {
     type: 'selected' | 'all';
   } | null>(null);
 
+  // Refs
+  const cardRefs = useRef<Map<string, HTMLElement>>(new Map());
+  const didScrollRestore = useRef(false);
+  const headerRef = useRef<HTMLElement>(null);
+
   const loadSessions = useCallback(async () => {
     setIsLoading(true);
     try {
       const all = await workoutRepo.getAllSessions();
-      // Only show completed sessions (with timeEnd)
       const completed = all.filter((s) => s.timeEnd !== null);
       setSessions(completed);
     } catch (err) {
@@ -75,14 +106,89 @@ export function HistoryPage() {
     loadSessions();
   }, [loadSessions]);
 
-  // Apply filter
-  const filteredSessions =
-    filter === 'all'
-      ? sessions
-      : sessions.filter((s) => s.dayTypeId === filter);
+  // Save filter to sessionStorage; reset pagination on filter change
+  useEffect(() => {
+    sessionStorage.setItem(FILTER_STORAGE_KEY, String(filter));
+    if (didScrollRestore.current) {
+      setVisibleCount(PAGE_SIZE);
+      sessionStorage.setItem(VISIBLE_COUNT_KEY, String(PAGE_SIZE));
+    }
+  }, [filter]);
 
-  // Group sessions by month (e.g., "Март 2026")
-  const grouped = groupByMonth(filteredSessions);
+  // Apply filter
+  const filteredSessions = useMemo(
+    () =>
+      filter === 'all'
+        ? sessions
+        : sessions.filter((s) => s.dayTypeId === filter),
+    [sessions, filter]
+  );
+
+  // Slice for pagination
+  const visibleSessions = useMemo(
+    () => filteredSessions.slice(0, visibleCount),
+    [filteredSessions, visibleCount]
+  );
+
+  const hasMore = visibleCount < filteredSessions.length;
+  const remainingCount = filteredSessions.length - visibleCount;
+
+  // Group visible sessions by month
+  const grouped = useMemo(() => groupByMonth(visibleSessions), [visibleSessions]);
+
+  // Scroll to last viewed session after data loads
+  useEffect(() => {
+    if (isLoading || didScrollRestore.current) return;
+    didScrollRestore.current = true;
+
+    const lastId = sessionStorage.getItem(LAST_VIEWED_SESSION_KEY);
+    if (!lastId) return;
+
+    // Ensure enough items are visible to include the target card
+    const targetIndex = filteredSessions.findIndex((s) => s.id === lastId);
+    if (targetIndex >= 0 && targetIndex >= visibleCount) {
+      const newCount = targetIndex + PAGE_SIZE;
+      setVisibleCount(newCount);
+      sessionStorage.setItem(VISIBLE_COUNT_KEY, String(newCount));
+    }
+
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        const el = cardRefs.current.get(lastId);
+        if (el) {
+          el.scrollIntoView({ block: 'center' });
+        }
+        sessionStorage.removeItem(LAST_VIEWED_SESSION_KEY);
+      });
+    });
+  }, [isLoading, filteredSessions, visibleCount]);
+
+  // Scroll to top when user taps the active History tab
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (detail === '/history') {
+        sessionStorage.removeItem(LAST_VIEWED_SESSION_KEY);
+        headerRef.current?.scrollIntoView({ behavior: 'smooth' });
+      }
+    };
+    window.addEventListener('nav-tap-active', handler);
+    return () => window.removeEventListener('nav-tap-active', handler);
+  }, []);
+
+  // Navigate to detail — remember which card was tapped
+  function openDetail(sessionId: string) {
+    sessionStorage.setItem(LAST_VIEWED_SESSION_KEY, sessionId);
+    sessionStorage.setItem(VISIBLE_COUNT_KEY, String(visibleCount));
+    navigate(`/detail/${sessionId}`);
+  }
+
+  // Load more
+  function loadMore() {
+    const newCount = visibleCount + PAGE_SIZE;
+    setVisibleCount(newCount);
+    sessionStorage.setItem(VISIBLE_COUNT_KEY, String(newCount));
+  }
 
   // --- Selection handlers ---
 
@@ -113,7 +219,6 @@ export function HistoryPage() {
     const allSelected = filteredIds.length > 0 && filteredIds.every((id) => selectedIds.has(id));
 
     if (allSelected) {
-      // Deselect all filtered
       setSelectedIds((prev) => {
         const next = new Set(prev);
         for (const id of filteredIds) {
@@ -122,7 +227,6 @@ export function HistoryPage() {
         return next;
       });
     } else {
-      // Select all filtered
       setSelectedIds((prev) => {
         const next = new Set(prev);
         for (const id of filteredIds) {
@@ -157,7 +261,6 @@ export function HistoryPage() {
     }
   }
 
-  // Count selected among currently visible (filtered) sessions
   const selectedInFilterCount = filteredSessions.filter((s) =>
     selectedIds.has(s.id)
   ).length;
@@ -169,10 +272,19 @@ export function HistoryPage() {
   const someFilteredSelected =
     selectedInFilterCount > 0 && !allFilteredSelected;
 
+  // Callback ref for session cards
+  const setCardRef = useCallback((id: string, el: HTMLElement | null) => {
+    if (el) {
+      cardRefs.current.set(id, el);
+    } else {
+      cardRefs.current.delete(id);
+    }
+  }, []);
+
   return (
     <div className="flex flex-col min-h-screen bg-[#121212] pb-20">
       {/* Header */}
-      <header className="px-5 pt-6 pb-3">
+      <header ref={headerRef} className="px-5 pt-6 pb-3">
         <div className="flex items-center justify-between">
           {isSelecting ? (
             <>
@@ -188,7 +300,6 @@ export function HistoryPage() {
                   ? `Выбрано: ${selectedIds.size}`
                   : 'Выберите тренировки'}
               </span>
-              {/* Select all / deselect all */}
               <button
                 onClick={toggleSelectAll}
                 className="w-10 h-10 rounded-full bg-[#1E1E1E] flex items-center justify-center
@@ -218,7 +329,6 @@ export function HistoryPage() {
                   )}
                 </p>
               </div>
-              {/* Enter selection mode — only show when there are sessions */}
               {sessions.length > 0 && (
                 <button
                   onClick={enterSelectionMode}
@@ -285,12 +395,9 @@ export function HistoryPage() {
           <div className="flex flex-col gap-5">
             {grouped.map((group) => (
               <div key={group.key}>
-                {/* Month header */}
                 <h2 className="text-sm font-semibold text-[#707070] uppercase tracking-wide mb-2">
                   {group.label}
                 </h2>
-
-                {/* Session cards */}
                 <div className="flex flex-col gap-2.5">
                   {group.sessions.map((session) => (
                     <SessionCard
@@ -303,14 +410,28 @@ export function HistoryPage() {
                         if (isSelecting) {
                           toggleSession(session.id);
                         } else {
-                          navigate(`/detail/${session.id}`);
+                          openDetail(session.id);
                         }
                       }}
+                      cardRef={(el) => setCardRef(session.id, el)}
                     />
                   ))}
                 </div>
               </div>
             ))}
+
+            {/* Load more button */}
+            {hasMore && (
+              <button
+                onClick={loadMore}
+                className="w-full py-3.5 rounded-xl bg-[#1E1E1E] text-[#B0B0B0] font-medium text-sm
+                           flex items-center justify-center gap-2
+                           active:bg-[#2A2A2A] transition-colors mb-2"
+              >
+                <ChevronDown size={18} />
+                Загрузить ещё ({Math.min(PAGE_SIZE, remainingCount)} из {remainingCount})
+              </button>
+            )}
           </div>
         )}
       </div>
@@ -394,6 +515,7 @@ interface SessionCardProps {
   isSelected: boolean;
   onToggle: () => void;
   onClick: () => void;
+  cardRef: (el: HTMLElement | null) => void;
 }
 
 function SessionCard({
@@ -402,6 +524,7 @@ function SessionCard({
   isSelected,
   onToggle,
   onClick,
+  cardRef,
 }: SessionCardProps) {
   const accentColor = getDayTypeColor(session.dayTypeId);
   const dayName = DAY_TYPE_NAMES_RU[session.dayTypeId] ?? '';
@@ -419,12 +542,12 @@ function SessionCard({
 
   return (
     <button
+      ref={cardRef}
       onClick={onClick}
       className={`w-full bg-[#252525] rounded-xl p-3.5 flex items-center gap-3
                   active:bg-[#2A2A2A] transition-colors text-left
                   ${isSelected ? 'ring-2 ring-[#F44336]/60' : ''}`}
     >
-      {/* Checkbox in selection mode, otherwise accent bar */}
       {isSelecting ? (
         <div
           className="shrink-0 w-6 h-6 rounded flex items-center justify-center"
@@ -446,9 +569,7 @@ function SessionCard({
         />
       )}
 
-      {/* Main content */}
       <div className="flex-1 min-w-0">
-        {/* Top row: day name + direction + date */}
         <div className="flex items-center gap-2 mb-1">
           <span className="font-bold text-white" style={{ color: accentColor }}>
             {dayName}
@@ -458,8 +579,6 @@ function SessionCard({
             {formatDate(session.date)}
           </span>
         </div>
-
-        {/* Bottom row: stats */}
         <div className="flex items-center gap-4 text-[#B0B0B0]">
           {session.totalKg > 0 && (
             <div className="flex items-center gap-1">
@@ -482,7 +601,6 @@ function SessionCard({
         </div>
       </div>
 
-      {/* Chevron (only in normal mode) */}
       {!isSelecting && (
         <ChevronRight size={18} className="text-[#555555] shrink-0" />
       )}
@@ -521,7 +639,7 @@ function groupByMonth(sessions: WorkoutSession[]): MonthGroup[] {
   for (const s of sessions) {
     const d = new Date(s.date);
     const year = d.getFullYear();
-    const month = d.getMonth(); // 0-based
+    const month = d.getMonth();
     const key = `${year}-${month}`;
 
     if (!map.has(key)) {

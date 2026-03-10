@@ -6,7 +6,7 @@
  */
 
 import { useEffect, useState } from 'react';
-import { HashRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { HashRouter, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { supabase } from './lib/supabase';
 import { useAppStore } from './stores/appStore';
 import { LoadingScreen } from './components/ui';
@@ -28,9 +28,34 @@ function shouldShowNav(pathname: string): boolean {
   return !HIDDEN_NAV_PATHS.some((p) => pathname.startsWith(p));
 }
 
+/**
+ * On fresh app launch, redirect to home and clear sessionStorage.
+ * Uses a sessionStorage flag to distinguish fresh launch from in-app navigation.
+ */
+let hasLaunched = false;
+
+function useRedirectOnLaunch() {
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  useEffect(() => {
+    if (!hasLaunched) {
+      hasLaunched = true;
+      // Fresh launch — clear stale navigation state and go home
+      sessionStorage.clear();
+      if (location.pathname !== '/') {
+        navigate('/', { replace: true });
+      }
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+}
+
+
 function AppContent() {
   const { initialize, isInitialized, isLoading } = useAppStore();
   const location = useLocation();
+
+  useRedirectOnLaunch();
 
   useEffect(() => {
     initialize();

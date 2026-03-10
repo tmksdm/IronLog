@@ -115,7 +115,7 @@ export async function finishWorkoutSession(
   const result = await db.query(
     `SELECT COALESCE(SUM(weight * actual_reps), 0) as total
      FROM exercise_logs
-     WHERE workout_session_id = ? AND is_skipped = 0 AND weight > 0`,
+     WHERE workout_session_id = ? AND is_skipped = 0 AND weight > 0 AND set_type = 'working'`,
     [id]
   );
   const totalKg = result.values?.[0]?.total ?? 0;
@@ -466,7 +466,7 @@ export async function getSessionExerciseSummary(
       summary.isSkipped = true;
     }
 
-    if (log.weight > 0 && log.actualReps > 0 && !log.isSkipped) {
+    if (log.weight > 0 && log.actualReps > 0 && !log.isSkipped && log.setType === 'working') {
       summary.totalKg += log.weight * log.actualReps;
     }
   }

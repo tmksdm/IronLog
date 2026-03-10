@@ -5,7 +5,7 @@
  * Update this file with each release.
  */
 
-export const APP_VERSION = '0.10.1';
+export const APP_VERSION = '0.11.0';
 
 export interface ChangelogEntry {
   version: string;
@@ -15,6 +15,18 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '0.11.0',
+    date: '2026-03-10',
+    changes: [
+      'Тоннаж теперь считается только по рабочим подходам (без разминочных)',
+      'История: постраничная загрузка (по 30 тренировок) для быстрой работы с большим списком',
+      'История: сохранение фильтра и позиции при переходе в тренировку и обратно',
+      'История: тап по иконке «История» в меню прокручивает список наверх',
+      'Приложение всегда открывается на главной странице при перезапуске',
+    ],
+  },
+
+    {
     version: '0.10.1',
     date: '2026-03-10',
     changes: [
