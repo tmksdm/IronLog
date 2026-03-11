@@ -80,6 +80,7 @@ export function StartWorkoutModal({
             unit="кг"
             formatValue={(v) => formatDecimal(v)}
             size="lg"
+            hideButtons            
           />
         </div>
 

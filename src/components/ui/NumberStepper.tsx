@@ -10,7 +10,7 @@ interface NumberStepperProps {
   max?: number;
   step?: number;
   /** Step for manual input snapping (defaults to step). Use smaller value to allow finer manual entry. */
-  inputStep?: number;  
+  inputStep?: number;
   /** Label above the stepper (or to the left in 'inline' layout) */
   label?: string;
   /** Units label (e.g. "кг") */
@@ -20,6 +20,8 @@ interface NumberStepperProps {
   size?: 'sm' | 'md' | 'lg';
   /** 'stacked' = label on top (default), 'inline' = label on left, controls on right */
   layout?: 'stacked' | 'inline';
+  /** Hide +/- buttons, show only tappable value (input-only mode) */
+  hideButtons?: boolean;
 }
 
 const sizeConfig = {
@@ -34,12 +36,13 @@ export function NumberStepper({
   min = 0,
   max = 999,
   step = 1,
-  inputStep,  
+  inputStep,
   label,
   unit,
   formatValue,
   size = 'md',
   layout = 'stacked',
+  hideButtons = false,
 }: NumberStepperProps) {
   const config = sizeConfig[size];
   const [isEditing, setIsEditing] = useState(false);
@@ -109,7 +112,7 @@ export function NumberStepper({
     <button
       onClick={handleTapValue}
       className={`${config.text} font-bold text-white ${config.valueMinW} text-center
-                 rounded-lg px-1 py-0.5 active:bg-[#2A2A2A] transition-colors`}
+                 rounded-lg px-3 py-2 ${hideButtons ? 'bg-[#1E1E1E] border border-[#333333]' : 'active:bg-[#2A2A2A]'} transition-colors`}
     >
       {displayValue}
       {unit && (
@@ -117,6 +120,24 @@ export function NumberStepper({
       )}
     </button>
   );
+
+  // Input-only mode: no +/- buttons
+  if (hideButtons) {
+    if (layout === 'inline') {
+      return (
+        <div className="flex items-center justify-between">
+          {label && <span className="text-sm text-[#B0B0B0]">{label}</span>}
+          {valueElement}
+        </div>
+      );
+    }
+    return (
+      <div className="flex flex-col items-center">
+        {label && <span className="text-sm text-[#B0B0B0] mb-2">{label}</span>}
+        {valueElement}
+      </div>
+    );
+  }
 
   const controls = (
     <div className={`flex items-center ${config.gap}`}>

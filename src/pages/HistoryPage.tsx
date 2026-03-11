@@ -34,6 +34,8 @@ import {
 } from '../utils/format';
 import { getDayTypeColor, DAY_TYPE_NAMES_RU } from '../theme';
 import { ConfirmModal } from '../components/workout';
+import { useAppStore } from '../stores/appStore';
+
 
 // Filter options
 type FilterOption = 'all' | 1 | 2 | 3;
@@ -55,6 +57,7 @@ const VISIBLE_COUNT_KEY = 'history_visible_count';
 
 export function HistoryPage() {
   const navigate = useNavigate();
+  const refreshNextDayInfo = useAppStore((s) => s.refreshNextDayInfo);  
   const [sessions, setSessions] = useState<WorkoutSession[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -245,6 +248,7 @@ export function HistoryPage() {
       setDeleteConfirm(null);
       exitSelectionMode();
       await loadSessions();
+      await refreshNextDayInfo();      
     } catch (err) {
       console.error('Failed to delete sessions:', err);
     }
@@ -256,6 +260,7 @@ export function HistoryPage() {
       setDeleteConfirm(null);
       exitSelectionMode();
       await loadSessions();
+      await refreshNextDayInfo();      
     } catch (err) {
       console.error('Failed to delete all sessions:', err);
     }

@@ -7,7 +7,7 @@
 
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useWorkoutStore } from '../../stores/workoutStore';
-import { ChevronUp, ChevronDown, Play, Square, Timer } from 'lucide-react';
+import { Play, Square, Timer } from 'lucide-react';
 
 interface CardioStepProps {
   onNext: () => void;
@@ -143,35 +143,21 @@ function JumpRopeInput({ onNext }: { onNext: () => void }) {
         )}
       </div>
 
-      {/* Jump count input */}
+      {/* Jump count input — just the number field, no +/- buttons */}
       <div className="flex flex-col items-center gap-2 mt-2">
         <span className="text-sm text-[#B0B0B0]">Количество прыжков</span>
-        <div className="flex items-center gap-3">
-          <button
-            onClick={() => setCount((c) => Math.max(0, c - 10))}
-            className="w-12 h-12 rounded-xl bg-[#2A2A2A] flex items-center justify-center active:bg-[#333333] transition-colors"
-          >
-            <ChevronDown size={24} className="text-[#B0B0B0]" />
-          </button>
-          <input
-            type="number"
-            inputMode="numeric"
-            value={count || ''}
-            onChange={(e) => {
-              const val = parseInt(e.target.value, 10);
-              setCount(isNaN(val) ? 0 : Math.max(0, val));
-            }}
-            placeholder="0"
-            className="w-24 h-14 text-center text-2xl font-bold text-white bg-[#1E1E1E] border border-[#333333] rounded-xl outline-none focus:border-[#FF9800] placeholder:text-[#555555]"
-          />
-          <button
-            onClick={() => setCount((c) => c + 10)}
-            className="w-12 h-12 rounded-xl bg-[#2A2A2A] flex items-center justify-center active:bg-[#333333] transition-colors"
-          >
-            <ChevronUp size={24} className="text-[#B0B0B0]" />
-          </button>
-        </div>
-        <span className="text-xs text-[#707070]">кнопки ±10</span>
+        <input
+          type="number"
+          inputMode="numeric"
+          value={count || ''}
+          onChange={(e) => {
+            const val = parseInt(e.target.value, 10);
+            setCount(isNaN(val) ? 0 : Math.max(0, val));
+          }}
+          onFocus={(e) => e.target.select()}
+          placeholder="0"
+          className="w-28 h-14 text-center text-2xl font-bold text-white bg-[#1E1E1E] border border-[#333333] rounded-xl outline-none focus:border-[#FF9800] placeholder:text-[#555555]"
+        />
       </div>
 
       {/* Action buttons */}
@@ -213,19 +199,6 @@ function TreadmillInput({ onNext }: { onNext: () => void }) {
     onNext();
   };
 
-  const adjustMinutes = (delta: number) => {
-    setMinutes((m) => Math.max(0, Math.min(59, m + delta)));
-  };
-
-  const adjustSeconds = (delta: number) => {
-    setSeconds((s) => {
-      const next = s + delta;
-      if (next < 0) return 55;
-      if (next >= 60) return 0;
-      return next;
-    });
-  };
-
   return (
     <div className="flex flex-col items-center gap-5 px-4">
       <h3 className="text-lg font-semibold text-white">Бег 3 км</h3>
@@ -238,16 +211,10 @@ function TreadmillInput({ onNext }: { onNext: () => void }) {
         <Timer size={32} className="text-[#2196F3]" />
       </div>
 
-      {/* Time input: MM : SS */}
-      <div className="flex items-center gap-2">
+      {/* Time input: MM : SS — just number fields, no arrows */}
+      <div className="flex items-center gap-3">
         {/* Minutes */}
         <div className="flex flex-col items-center gap-1">
-          <button
-            onClick={() => adjustMinutes(1)}
-            className="w-14 h-10 rounded-lg bg-[#2A2A2A] flex items-center justify-center active:bg-[#333333] transition-colors"
-          >
-            <ChevronUp size={22} className="text-[#B0B0B0]" />
-          </button>
           <input
             type="number"
             inputMode="numeric"
@@ -257,27 +224,15 @@ function TreadmillInput({ onNext }: { onNext: () => void }) {
               const val = parseInt(e.target.value, 10);
               setMinutes(isNaN(val) ? 0 : Math.max(0, Math.min(59, val)));
             }}
-            className="w-16 h-16 text-center text-3xl font-bold text-white bg-[#1E1E1E] border border-[#333333] rounded-xl outline-none focus:border-[#2196F3]"
+            className="w-20 h-16 text-center text-3xl font-bold text-white bg-[#1E1E1E] border border-[#333333] rounded-xl outline-none focus:border-[#2196F3]"
           />
-          <button
-            onClick={() => adjustMinutes(-1)}
-            className="w-14 h-10 rounded-lg bg-[#2A2A2A] flex items-center justify-center active:bg-[#333333] transition-colors"
-          >
-            <ChevronDown size={22} className="text-[#B0B0B0]" />
-          </button>
-          <span className="text-xs text-[#707070] mt-0.5">мин</span>
+          <span className="text-xs text-[#707070]">мин</span>
         </div>
 
-        <span className="text-3xl font-bold text-[#707070] mb-8">:</span>
+        <span className="text-3xl font-bold text-[#707070] mb-5">:</span>
 
         {/* Seconds */}
         <div className="flex flex-col items-center gap-1">
-          <button
-            onClick={() => adjustSeconds(5)}
-            className="w-14 h-10 rounded-lg bg-[#2A2A2A] flex items-center justify-center active:bg-[#333333] transition-colors"
-          >
-            <ChevronUp size={22} className="text-[#B0B0B0]" />
-          </button>
           <input
             type="number"
             inputMode="numeric"
@@ -287,15 +242,9 @@ function TreadmillInput({ onNext }: { onNext: () => void }) {
               const val = parseInt(e.target.value, 10);
               setSeconds(isNaN(val) ? 0 : Math.max(0, Math.min(59, val)));
             }}
-            className="w-16 h-16 text-center text-3xl font-bold text-white bg-[#1E1E1E] border border-[#333333] rounded-xl outline-none focus:border-[#2196F3]"
+            className="w-20 h-16 text-center text-3xl font-bold text-white bg-[#1E1E1E] border border-[#333333] rounded-xl outline-none focus:border-[#2196F3]"
           />
-          <button
-            onClick={() => adjustSeconds(-5)}
-            className="w-14 h-10 rounded-lg bg-[#2A2A2A] flex items-center justify-center active:bg-[#333333] transition-colors"
-          >
-            <ChevronDown size={22} className="text-[#B0B0B0]" />
-          </button>
-          <span className="text-xs text-[#707070] mt-0.5">сек (±5)</span>
+          <span className="text-xs text-[#707070]">сек</span>
         </div>
       </div>
 

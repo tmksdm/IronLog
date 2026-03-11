@@ -5,7 +5,7 @@
  * Update this file with each release.
  */
 
-export const APP_VERSION = '0.11.1';
+export const APP_VERSION = '0.11.2';
 
 export interface ChangelogEntry {
   version: string;
@@ -14,7 +14,16 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
-  {
+    {
+    version: '0.11.2',
+    date: '2026-03-11',
+    changes: [
+      'Исправлено обновление страницы жестом «потянуть вниз» при открытых модальных окнах',
+      'Убраны кнопки +/- из модальных окон ввода веса, кардио — теперь только ввод с клавиатуры',
+      'Главный экран обновляется после удаления тренировки (одиночного и пакетного)',
+    ],
+  },  
+    {
     version: '0.11.1',
     date: '2026-03-10',
     changes: [

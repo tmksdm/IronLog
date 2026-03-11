@@ -9,8 +9,6 @@ import { useState, useMemo } from 'react';
 import { useWorkoutStore } from '../../stores/workoutStore';
 import type { ActiveExercise } from '../../stores/workoutStore';
 import {
-  ChevronUp,
-  ChevronDown,
   Dumbbell,
   Clock,
   Scale,
@@ -95,12 +93,6 @@ export default function SummaryStep({ onFinish, onBack, isSaving }: SummaryStepP
   }, [session]);
 
   const dayName = session ? (DAY_NAMES[session.dayTypeId] ?? '') : '';
-
-  const handleWeightChange = (delta: number) => {
-    const current = parseFloat(weightAfter.replace(',', '.')) || 0;
-    const next = Math.max(0, +(current + delta).toFixed(2));
-    setWeightAfter(next.toString());
-  };
 
   const handleFinish = () => {
     const parsed = parseFloat(weightAfter.replace(',', '.'));
@@ -192,13 +184,7 @@ export default function SummaryStep({ onFinish, onBack, isSaving }: SummaryStepP
           <Scale size={18} className="text-[#B0B0B0]" />
           <span className="text-sm text-[#B0B0B0]">Вес после тренировки</span>
         </div>
-        <div className="flex items-center justify-center gap-3">
-          <button
-            onClick={() => handleWeightChange(-0.25)}
-            className="w-11 h-11 rounded-xl bg-[#2A2A2A] flex items-center justify-center active:bg-[#333333] transition-colors"
-          >
-            <ChevronDown size={22} className="text-[#B0B0B0]" />
-          </button>
+        <div className="flex items-center justify-center">
           <div className="relative">
             <input
               type="text"
@@ -207,20 +193,13 @@ export default function SummaryStep({ onFinish, onBack, isSaving }: SummaryStepP
               value={weightAfter}
               onChange={(e) => setWeightAfter(e.target.value)}
               placeholder="0"
-              className="w-28 h-14 text-center text-2xl font-bold text-white bg-[#1E1E1E] border border-[#333333] rounded-xl outline-none focus:border-[#4CAF50] placeholder:text-[#555555]"
+              className="w-32 h-14 text-center text-2xl font-bold text-white bg-[#1E1E1E] border border-[#333333] rounded-xl outline-none focus:border-[#4CAF50] placeholder:text-[#555555]"
             />
             <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-[#707070]">
               кг
             </span>
           </div>
-          <button
-            onClick={() => handleWeightChange(0.25)}
-            className="w-11 h-11 rounded-xl bg-[#2A2A2A] flex items-center justify-center active:bg-[#333333] transition-colors"
-          >
-            <ChevronUp size={22} className="text-[#B0B0B0]" />
-          </button>
         </div>
-        <p className="text-xs text-[#707070] text-center mt-2">кнопки ±0,25 кг</p>
       </div>
 
       {/* Action buttons */}

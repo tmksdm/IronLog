@@ -32,10 +32,13 @@ import {
 import { getDayTypeColor, getDayTypeTextClass, DAY_TYPE_NAMES_RU } from '../theme';
 import { LoadingScreen } from '../components/ui';
 import { ConfirmModal } from '../components/workout';
+import { useAppStore } from '../stores/appStore';
+
 
 export function WorkoutDetailPage() {
   const { sessionId } = useParams<{ sessionId: string }>();
   const navigate = useNavigate();
+  const refreshNextDayInfo = useAppStore((s) => s.refreshNextDayInfo);
 
   const [session, setSession] = useState<WorkoutSession | null>(null);
   const [exerciseSummaries, setExerciseSummaries] = useState<ExerciseSummary[]>([]);
@@ -84,6 +87,7 @@ export function WorkoutDetailPage() {
     if (!sessionId) return;
     try {
       await workoutRepo.deleteWorkoutSession(sessionId);
+      await refreshNextDayInfo();      
       navigate('/history', { replace: true });
     } catch (err) {
       console.error('Failed to delete workout:', err);
