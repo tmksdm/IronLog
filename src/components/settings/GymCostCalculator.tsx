@@ -2,12 +2,19 @@
 
 /**
  * Gym membership cost calculator.
- * Calculates cost per workout based on subscription price, duration, and planned frequency.
+ * Calculates planned vs projected cost per workout based on subscription
+ * price, duration, start date, and planned frequency.
  * Persists values in localStorage.
+ *
+ * Logic:
+ * - Planned cost = price / (months × 4.33 × perWeek)
+ * - Projected cost = based on actual training pace extrapolated to full period.
+ *   If user did N workouts in D elapsed days, projected total = N / D × totalDays.
+ *   Projected cost per workout = price / projectedTotal.
  */
 
 import { useState, useEffect, useCallback } from 'react';
-import { Calculator, TrendingDown, TrendingUp } from 'lucide-react';
+import { Calculator, TrendingDown, TrendingUp, CalendarDays } from 'lucide-react';
 import { Card } from '../ui';
 import { workoutRepo } from '../../db';
 import { formatDecimal } from '../../utils/format';
@@ -19,12 +26,22 @@ interface GymCostData {
   price: number;       // Total subscription price (rubles)
   months: number;      // Subscription duration (months)
   perWeek: number;     // Planned workouts per week
+  startDate: string;   // Subscription start date (YYYY-MM-DD)
+}
+
+/** Default start date = first day of current month */
+function defaultStartDate(): string {
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = (now.getMonth() + 1).toString().padStart(2, '0');
+  return `${y}-${m}-01`;
 }
 
 const DEFAULTS: GymCostData = {
   price: 18000,
   months: 6,
   perWeek: 4,
+  startDate: defaultStartDate(),
 };
 
 function loadData(): GymCostData {
@@ -36,6 +53,9 @@ function loadData(): GymCostData {
       price: typeof parsed.price === 'number' && parsed.price > 0 ? parsed.price : DEFAULTS.price,
       months: typeof parsed.months === 'number' && parsed.months > 0 ? parsed.months : DEFAULTS.months,
       perWeek: typeof parsed.perWeek === 'number' && parsed.perWeek > 0 ? parsed.perWeek : DEFAULTS.perWeek,
+      startDate: typeof parsed.startDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(parsed.startDate)
+        ? parsed.startDate
+        : DEFAULTS.startDate,
     };
   } catch {
     return DEFAULTS;
@@ -46,9 +66,35 @@ function saveData(data: GymCostData) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
 }
 
+/** Format YYYY-MM-DD to "15.03.2026" */
+function fmtDate(isoDate: string): string {
+  const [y, m, d] = isoDate.split('-');
+  return `${d}.${m}.${y}`;
+}
+
+/** Add N months to a YYYY-MM-DD string, return Date */
+function addMonths(isoDate: string, months: number): Date {
+  const d = new Date(isoDate + 'T00:00:00');
+  d.setMonth(d.getMonth() + months);
+  return d;
+}
+
+/** Days between two dates (can be negative) */
+function daysBetween(a: Date, b: Date): number {
+  const msPerDay = 1000 * 60 * 60 * 24;
+  return Math.ceil((b.getTime() - a.getTime()) / msPerDay);
+}
+
+/** Format Date to YYYY-MM-DD */
+function toISODate(d: Date): string {
+  const y = d.getFullYear();
+  const m = (d.getMonth() + 1).toString().padStart(2, '0');
+  const day = d.getDate().toString().padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
 /**
- * Compact inline stepper for integer/number input — simpler than NumberStepper.
- * Tailored for the calculator card layout.
+ * Compact inline stepper for integer/number input.
  */
 function MiniStepper({
   value,
@@ -138,6 +184,38 @@ function MiniStepper({
   );
 }
 
+/**
+ * Date picker row — tap to open native date input.
+ */
+function DatePickerRow({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string; // YYYY-MM-DD
+  onChange: (v: string) => void;
+}) {
+  return (
+    <div className="flex items-center justify-between">
+      <span className="text-sm text-[#B0B0B0] shrink-0">{label}</span>
+      <div className="flex items-center gap-2">
+        <CalendarDays size={16} className="text-[#555]" />
+        <input
+          type="date"
+          value={value}
+          onChange={(e) => {
+            if (e.target.value) onChange(e.target.value);
+          }}
+          className="bg-[#333] text-white font-bold text-base rounded-lg px-3 py-1.5
+                     border-none outline-none appearance-none
+                     [color-scheme:dark]"
+        />
+      </div>
+    </div>
+  );
+}
+
 export function GymCostCalculator() {
   const [data, setData] = useState<GymCostData>(loadData);
   const [actualCount, setActualCount] = useState<number | null>(null);
@@ -148,22 +226,29 @@ export function GymCostCalculator() {
     saveData(data);
   }, [data]);
 
-  // Count actual workouts in the subscription period
+  // Derived dates
+  const startDate = new Date(data.startDate + 'T00:00:00');
+  const endDate = addMonths(data.startDate, data.months);
+  const endDateStr = toISODate(endDate);
+  const now = new Date();
+  const totalDays = daysBetween(startDate, endDate);
+  const elapsedDays = Math.max(1, daysBetween(startDate, now)); // at least 1 to avoid division by 0
+  const daysLeft = daysBetween(now, endDate);
+  const isExpired = daysLeft < 0;
+
+  // Count actual workouts from subscription start date to today
   const loadActualCount = useCallback(async () => {
     try {
-      // Subscription end = today, subscription start = today minus N months
-      const now = new Date();
-      const start = new Date(now);
-      start.setMonth(start.getMonth() - data.months);
       const count = await workoutRepo.countSessionsInRange(
-        start.toISOString(),
+        startDate.toISOString(),
         now.toISOString()
       );
       setActualCount(count);
     } catch {
       setActualCount(null);
     }
-  }, [data.months]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data.startDate]);
 
   useEffect(() => {
     if (isExpanded) {
@@ -171,20 +256,42 @@ export function GymCostCalculator() {
     }
   }, [isExpanded, loadActualCount]);
 
-  // Calculations
-  const totalWeeks = data.months * 4.33; // average weeks per month
+  // ---- Planned calculations ----
+  const totalWeeks = data.months * 4.33;
   const plannedWorkouts = Math.round(totalWeeks * data.perWeek);
-  const plannedCostPerWorkout = plannedWorkouts > 0 ? data.price / plannedWorkouts : 0;
-  const actualCostPerWorkout =
-    actualCount !== null && actualCount > 0 ? data.price / actualCount : null;
+  const plannedCost = plannedWorkouts > 0 ? data.price / plannedWorkouts : 0;
 
-  // Is the user losing money? (actual cost > planned cost by >20%)
-  const isOverpaying =
-    actualCostPerWorkout !== null &&
-    plannedCostPerWorkout > 0 &&
-    actualCostPerWorkout > plannedCostPerWorkout * 1.2;
+  // ---- Actual/Projected calculations ----
+  // How many workouts SHOULD have happened by now at planned pace
+  const expectedByNow = !isExpired
+    ? Math.round((elapsedDays / totalDays) * plannedWorkouts)
+    : plannedWorkouts;
 
-  const update = (field: keyof GymCostData, value: number) => {
+  // Project: if user keeps current pace, how many total workouts by end of subscription
+  let projectedTotal: number | null = null;
+  let projectedCost: number | null = null;
+
+  if (actualCount !== null && actualCount > 0 && totalDays > 0) {
+    if (isExpired) {
+      // Subscription ended — actual total is final
+      projectedTotal = actualCount;
+    } else {
+      // Extrapolate current pace to full period
+      projectedTotal = Math.round((actualCount / elapsedDays) * totalDays);
+    }
+    projectedCost = projectedTotal > 0 ? data.price / projectedTotal : null;
+  }
+
+  // Deficit: how many workouts behind schedule
+  const deficit = actualCount !== null ? expectedByNow - actualCount : null;
+
+  // Is the user behind? (projected cost > planned cost by >10%)
+  const isBehind =
+    projectedCost !== null &&
+    plannedCost > 0 &&
+    projectedCost > plannedCost * 1.1;
+
+  const update = <K extends keyof GymCostData>(field: K, value: GymCostData[K]) => {
     setData((prev) => ({ ...prev, [field]: value }));
   };
 
@@ -202,11 +309,19 @@ export function GymCostCalculator() {
           <div className="flex-1 min-w-0">
             <div className="text-white font-medium">Стоимость абонемента</div>
             <div className="text-xs text-[#707070] mt-0.5">
-              {formatDecimal(plannedCostPerWorkout, 0)} ₽ за тренировку по плану
+              {formatDecimal(plannedCost, 0)} ₽ за тренировку по плану
+              {!isExpired && daysLeft <= 30 && daysLeft >= 0 && (
+                <span className="text-yellow-500 ml-1">
+                  · {daysLeft} дн. осталось
+                </span>
+              )}
+              {isExpired && (
+                <span className="text-red-400 ml-1">· истёк</span>
+              )}
             </div>
           </div>
           <div
-            className={`text-right shrink-0 transition-transform duration-200 ${
+            className={`shrink-0 transition-transform duration-200 ${
               isExpanded ? 'rotate-180' : ''
             }`}
           >
@@ -255,7 +370,38 @@ export function GymCostCalculator() {
               max={7}
               step={1}
             />
+            <DatePickerRow
+              label="Дата оплаты"
+              value={data.startDate}
+              onChange={(v) => update('startDate', v)}
+            />
           </div>
+
+          {/* Subscription period info */}
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-[#555]">Период</span>
+            <span className="text-xs text-[#707070]">
+              {fmtDate(data.startDate)} — {fmtDate(endDateStr)}
+            </span>
+          </div>
+
+          {!isExpired ? (
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-[#555]">Осталось</span>
+              <span className={`text-xs font-medium ${
+                daysLeft <= 14 ? 'text-yellow-500' : 'text-[#707070]'
+              }`}>
+                {daysLeft} дн.
+              </span>
+            </div>
+          ) : (
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-[#555]">Статус</span>
+              <span className="text-xs font-medium text-red-400">
+                Истёк {Math.abs(daysLeft)} дн. назад
+              </span>
+            </div>
+          )}
 
           {/* Divider */}
           <div className="border-t border-[#333]" />
@@ -265,7 +411,7 @@ export function GymCostCalculator() {
             <span className="text-sm text-[#B0B0B0]">По плану</span>
             <div className="text-right">
               <span className="text-lg font-bold text-green-500">
-                {formatDecimal(plannedCostPerWorkout, 0)} ₽
+                {formatDecimal(plannedCost, 0)} ₽
               </span>
               <span className="text-xs text-[#707070] ml-2">
                 / тренировка
@@ -273,64 +419,102 @@ export function GymCostCalculator() {
             </div>
           </div>
 
-          {/* Planned sessions count */}
           <div className="flex items-center justify-between">
-            <span className="text-xs text-[#555]">Ожидаемое кол-во</span>
+            <span className="text-xs text-[#555]">Всего по плану</span>
             <span className="text-xs text-[#707070]">
               ~{plannedWorkouts} тренировок за {data.months} мес
             </span>
           </div>
 
-          {/* Actual result (if we have workout data) */}
+          {/* Actual / Projected section */}
           {actualCount !== null && (
             <>
               <div className="border-t border-[#333]" />
 
+              {/* Current progress */}
               <div className="flex items-center justify-between">
-                <span className="text-sm text-[#B0B0B0]">Фактически</span>
-                <div className="text-right flex items-center gap-2">
-                  {actualCostPerWorkout !== null ? (
-                    <>
-                      {isOverpaying ? (
+                <span className="text-sm text-[#B0B0B0]">Сходил</span>
+                <span className="text-sm text-white font-medium">
+                  {actualCount}
+                  <span className="text-[#555]"> / {expectedByNow} ожид.</span>
+                </span>
+              </div>
+
+              {/* Deficit warning */}
+              {deficit !== null && deficit > 0 && !isExpired && (
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-[#555]">Отставание</span>
+                  <span className="text-xs font-medium text-yellow-500">
+                    −{deficit} тренировок
+                  </span>
+                </div>
+              )}
+
+              {deficit !== null && deficit <= 0 && !isExpired && actualCount > 0 && (
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-[#555]">Опережение</span>
+                  <span className="text-xs font-medium text-green-400">
+                    +{Math.abs(deficit)} тренировок
+                  </span>
+                </div>
+              )}
+
+              {/* Projected cost */}
+              {projectedCost !== null && (
+                <>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-[#B0B0B0]">
+                      {isExpired ? 'Итого' : 'Прогноз'}
+                    </span>
+                    <div className="text-right flex items-center gap-2">
+                      {isBehind ? (
                         <TrendingUp size={16} className="text-red-400" />
                       ) : (
                         <TrendingDown size={16} className="text-green-400" />
                       )}
                       <span
                         className={`text-lg font-bold ${
-                          isOverpaying ? 'text-red-400' : 'text-green-500'
+                          isBehind ? 'text-red-400' : 'text-green-500'
                         }`}
                       >
-                        {formatDecimal(actualCostPerWorkout, 0)} ₽
+                        {formatDecimal(projectedCost, 0)} ₽
                       </span>
                       <span className="text-xs text-[#707070]">
                         / тренировка
                       </span>
-                    </>
-                  ) : (
-                    <span className="text-sm text-[#555]">нет данных</span>
+                    </div>
+                  </div>
+
+                  {!isExpired && projectedTotal !== null && (
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-[#555]">
+                        При текущем темпе
+                      </span>
+                      <span className="text-xs text-[#707070]">
+                        ~{projectedTotal} тренировок к концу
+                      </span>
+                    </div>
                   )}
+                </>
+              )}
+
+              {/* No workouts yet */}
+              {actualCount === 0 && (
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-[#B0B0B0]">Прогноз</span>
+                  <span className="text-sm text-[#555]">нет данных</span>
                 </div>
-              </div>
+              )}
 
-              <div className="flex items-center justify-between">
-                <span className="text-xs text-[#555]">
-                  За последние {data.months} мес
-                </span>
-                <span className="text-xs text-[#707070]">
-                  {actualCount} тренировок
-                </span>
-              </div>
-
-              {/* Motivational nudge if overpaying */}
-              {isOverpaying && actualCostPerWorkout !== null && (
+              {/* Motivational nudge if behind */}
+              {isBehind && projectedCost !== null && (
                 <div className="bg-red-600/10 rounded-xl px-4 py-3 border border-red-600/20">
                   <p className="text-sm text-red-300">
-                    Переплата{' '}
+                    При текущем темпе тренировка обойдётся в{' '}
                     <span className="font-bold">
-                      {formatDecimal(actualCostPerWorkout - plannedCostPerWorkout, 0)} ₽
+                      {formatDecimal(projectedCost, 0)} ₽
                     </span>{' '}
-                    за каждую тренировку. Не ленись!
+                    вместо {formatDecimal(plannedCost, 0)} ₽. Не ленись!
                   </p>
                 </div>
               )}
