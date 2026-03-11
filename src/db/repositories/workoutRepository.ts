@@ -13,7 +13,7 @@ import type {
   SetType,
   CardioType,
 } from '../../types';
-import { deleteSessionFromCloud } from '../../lib/sync';
+import { deleteSessionFromCloud, deleteAllSessionsFromCloud, deleteMultipleSessionsFromCloud } from '../../lib/sync';
 
 
 // --- Session row mapping ---
@@ -222,12 +222,10 @@ export async function deleteMultipleSessions(sessionIds: string[]): Promise<void
   await db.run(`DELETE FROM workout_sessions WHERE id IN (${placeholders})`, sessionIds);
   await saveToStore();
 
-  // Sync deletions to cloud
-  for (const id of sessionIds) {
-    deleteSessionFromCloud(id).catch((err) =>
-      console.error('Cloud sync after session delete failed:', err)
-    );
-  }
+  // Sync deletions to cloud (batch, not one-by-one)
+  deleteMultipleSessionsFromCloud(sessionIds).catch((err) =>
+    console.error('Cloud sync after batch delete failed:', err)
+  );
 }
 
 /**
@@ -239,6 +237,11 @@ export async function deleteAllSessions(): Promise<void> {
   await db.run('DELETE FROM exercise_logs');
   await db.run('DELETE FROM workout_sessions');
   await saveToStore();
+
+  // Sync deletion to cloud
+  deleteAllSessionsFromCloud().catch((err) =>
+    console.error('Cloud sync after delete-all failed:', err)
+  );
 }
 
 /**

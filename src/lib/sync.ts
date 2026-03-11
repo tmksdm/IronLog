@@ -400,3 +400,77 @@ export async function deleteExerciseFromCloud(exerciseId: string): Promise<void>
     console.error('deleteExerciseFromCloud error:', error);
   }
 }
+
+/**
+ * Delete ALL workout sessions (and cascading logs) from Supabase for the current user.
+ */
+export async function deleteAllSessionsFromCloud(): Promise<void> {
+  const userId = await getUserId();
+  if (!userId) return;
+
+  try {
+    // Delete all cardio_logs for this user
+    const { error: cardioError } = await supabase
+      .from('cardio_logs')
+      .delete()
+      .eq('user_id', userId);
+    if (cardioError) console.error('deleteAllSessionsFromCloud cardio_logs error:', cardioError.message);
+
+    // Delete all exercise_logs for this user
+    const { error: logsError } = await supabase
+      .from('exercise_logs')
+      .delete()
+      .eq('user_id', userId);
+    if (logsError) console.error('deleteAllSessionsFromCloud exercise_logs error:', logsError.message);
+
+    // Delete all workout_sessions for this user
+    const { error: sessionsError } = await supabase
+      .from('workout_sessions')
+      .delete()
+      .eq('user_id', userId);
+    if (sessionsError) console.error('deleteAllSessionsFromCloud sessions error:', sessionsError.message);
+
+    console.log('deleteAllSessionsFromCloud: success');
+  } catch (error) {
+    console.error('deleteAllSessionsFromCloud error:', error);
+  }
+}
+
+/**
+ * Delete multiple workout sessions from Supabase by IDs.
+ */
+export async function deleteMultipleSessionsFromCloud(sessionIds: string[]): Promise<void> {
+  const userId = await getUserId();
+  if (!userId || sessionIds.length === 0) return;
+
+  try {
+    // Delete cardio_logs
+    const { error: cardioError } = await supabase
+      .from('cardio_logs')
+      .delete()
+      .in('workout_session_id', sessionIds)
+      .eq('user_id', userId);
+    if (cardioError) console.error('deleteMultipleSessionsFromCloud cardio error:', cardioError.message);
+
+    // Delete exercise_logs
+    const { error: logsError } = await supabase
+      .from('exercise_logs')
+      .delete()
+      .in('workout_session_id', sessionIds)
+      .eq('user_id', userId);
+    if (logsError) console.error('deleteMultipleSessionsFromCloud logs error:', logsError.message);
+
+    // Delete sessions
+    const { error: sessionsError } = await supabase
+      .from('workout_sessions')
+      .delete()
+      .in('id', sessionIds)
+      .eq('user_id', userId);
+    if (sessionsError) console.error('deleteMultipleSessionsFromCloud sessions error:', sessionsError.message);
+
+    console.log(`deleteMultipleSessionsFromCloud: deleted ${sessionIds.length} sessions`);
+  } catch (error) {
+    console.error('deleteMultipleSessionsFromCloud error:', error);
+  }
+}
+

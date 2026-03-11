@@ -5,7 +5,7 @@
  * Update this file with each release.
  */
 
-export const APP_VERSION = '0.11.3';
+export const APP_VERSION = '0.11.4';
 
 export interface ChangelogEntry {
   version: string;
@@ -15,6 +15,14 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '0.11.4',
+    date: '2026-03-11',
+    changes: [
+      'Исправлено: удалённые тренировки возвращались после перезапуска (удаление не синхронизировалось с облаком)',
+    ],
+  },
+
+    {
     version: '0.11.3',
     date: '2026-03-11',
     changes: [
