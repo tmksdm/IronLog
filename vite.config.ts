@@ -1,21 +1,30 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
-import { writeFileSync, mkdirSync } from 'fs';
-import { resolve } from 'path';
+import { readFileSync, writeFileSync, mkdirSync } from 'fs';
+import { resolve, dirname } from 'path';
+import { fileURLToPath } from 'url';
 
-// Read version from version.ts at build time
+const __dirname = dirname(fileURLToPath(import.meta.url));
+
+// Read APP_VERSION from src/version.ts at build time
+function getAppVersion(): string {
+  try {
+    const content = readFileSync(resolve(__dirname, 'src/version.ts'), 'utf-8');
+    const match = content.match(/APP_VERSION\s*=\s*['"]([^'"]+)['"]/);
+    return match?.[1] ?? '0.0.0';
+  } catch {
+    return '0.0.0';
+  }
+}
+
+// Vite plugin: generate version.json in the output directory after build
 function versionJsonPlugin() {
   return {
     name: 'generate-version-json',
-    writeBundle(options: { dir?: string }) {
-      const outDir = options.dir || 'dist';
-      // Dynamic import won't work here, so we read the file directly
-      const versionFile = resolve(__dirname, 'src/version.ts');
-      const content = require('fs').readFileSync(versionFile, 'utf-8');
-      const match = content.match(/APP_VERSION\s*=\s*['"]([^'"]+)['"]/);
-      const version = match ? match[1] : '0.0.0';
-
+    closeBundle() {
+      const version = getAppVersion();
+      const outDir = resolve(__dirname, 'dist');
       mkdirSync(outDir, { recursive: true });
       writeFileSync(
         resolve(outDir, 'version.json'),
