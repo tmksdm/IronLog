@@ -5,3 +5,4 @@ export { Card } from './Card';
 export { Modal } from './Modal';
 export { NumberStepper } from './NumberStepper';
 export { LoadingScreen } from './LoadingScreen';
+export { UpdateBanner } from './UpdateBanner';

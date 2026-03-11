@@ -2,14 +2,14 @@
 
 /**
  * Root component with authentication gate, routing, bottom navigation,
- * and app initialization.
+ * app initialization, and update checking.
  */
 
 import { useEffect, useState } from 'react';
 import { HashRouter, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { supabase } from './lib/supabase';
 import { useAppStore } from './stores/appStore';
-import { LoadingScreen } from './components/ui';
+import { LoadingScreen, UpdateBanner } from './components/ui';
 import { BottomNav } from './components/layout';
 import { LoginPage } from './pages/LoginPage';
 import { HomePage } from './pages/HomePage';
@@ -20,6 +20,7 @@ import { WorkoutDetailPage } from './pages/WorkoutDetailPage';
 import { AnalyticsPage } from './pages/AnalyticsPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { ExerciseEditorPage } from './pages/ExerciseEditorPage';
+import { startUpdateChecker } from './utils/updateChecker';
 
 /** Pages where the bottom nav should be hidden */
 const HIDDEN_NAV_PATHS = ['/workout', '/summary'];
@@ -89,6 +90,15 @@ function AppContent() {
 function App() {
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [updateVersion, setUpdateVersion] = useState<string | null>(null);
+
+  // Check for app updates (GitHub Pages / PWA)
+  useEffect(() => {
+    const cleanup = startUpdateChecker((remoteVersion) => {
+      setUpdateVersion(remoteVersion);
+    });
+    return cleanup;
+  }, []);
 
   useEffect(() => {
     // Check for existing session on mount
@@ -125,14 +135,22 @@ function App() {
 
   // Not logged in — show login page
   if (!isAuthenticated) {
-    return <LoginPage onLoginSuccess={() => setIsAuthenticated(true)} />;
+    return (
+      <>
+        {updateVersion && <UpdateBanner remoteVersion={updateVersion} />}
+        <LoginPage onLoginSuccess={() => setIsAuthenticated(true)} />
+      </>
+    );
   }
 
   // Logged in — show the app
   return (
-    <HashRouter>
-      <AppContent />
-    </HashRouter>
+    <>
+      {updateVersion && <UpdateBanner remoteVersion={updateVersion} />}
+      <HashRouter>
+        <AppContent />
+      </HashRouter>
+    </>
   );
 }
 
