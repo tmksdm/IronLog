@@ -79,6 +79,7 @@ export interface CardioLog {
   type: CardioType;
   durationSeconds: number | null;
   count: number | null;
+  succeeded: boolean | null;
 }
 
 // --- UI helper types ---
@@ -108,6 +109,7 @@ export interface WorkoutSnapshot {
   cardioType: CardioType | null;
   jumpRopeCount: number | null;
   treadmillSeconds: number | null;
+  treadmillSucceeded: boolean | null;
   isCardioCompleted: boolean;
   restTimerDefault: number;
 }

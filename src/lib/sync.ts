@@ -69,6 +69,7 @@ interface SupabaseCardioLog {
   type: string;
   duration_seconds: number | null;
   count: number | null;
+  succeeded: number | null;
 }
 
 // ==========================================
@@ -199,13 +200,14 @@ export async function pushToCloud(): Promise<void> {
     const cardioLogs = (cardioResult.values ?? []) as any[];
 
     if (cardioLogs.length > 0) {
-      const rows: SupabaseCardioLog[] = cardioLogs.map((c) => ({
+      const rows: SupabaseCardioLog[] = cardioLogs.map((c: any) => ({
         id: c.id,
         user_id: userId,
         workout_session_id: c.workout_session_id,
         type: c.type,
         duration_seconds: c.duration_seconds,
         count: c.count,
+        succeeded: c.succeeded ?? null,
       }));
 
       const { error } = await supabase
@@ -325,9 +327,9 @@ export async function pullFromCloud(): Promise<boolean> {
       for (const c of cardio) {
         await db.run(
           `INSERT INTO cardio_logs
-            (id, workout_session_id, type, duration_seconds, count)
-           VALUES (?, ?, ?, ?, ?)`,
-          [c.id, c.workout_session_id, c.type, c.duration_seconds, c.count]
+            (id, workout_session_id, type, duration_seconds, count, succeeded)
+           VALUES (?, ?, ?, ?, ?, ?)`,
+          [c.id, c.workout_session_id, c.type, c.duration_seconds, c.count, (c as any).succeeded ?? null]
         );
       }
     } finally {

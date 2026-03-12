@@ -39,6 +39,27 @@ async function initWeb(): Promise<void> {
 
 
 /**
+ * Run schema migrations safely. Each migration checks if already applied.
+ */
+async function runMigrations(connection: SQLiteDBConnection): Promise<void> {
+  try {
+    // v0.12.0: Add 'succeeded' column to cardio_logs
+    const tableInfo = await connection.query("PRAGMA table_info('cardio_logs')");
+    const columns = (tableInfo.values ?? []) as Array<{ name: string }>;
+    const hasSucceeded = columns.some((col) => col.name === 'succeeded');
+
+    if (!hasSucceeded) {
+      await connection.execute(
+        'ALTER TABLE cardio_logs ADD COLUMN succeeded INTEGER;'
+      );
+      console.log('Migration: added succeeded column to cardio_logs');
+    }
+  } catch (error) {
+    console.error('Migration error:', error);
+  }
+}
+
+/**
  * Open the database and run schema + seed migrations.
  */
 async function openAndInit(): Promise<SQLiteDBConnection> {
@@ -83,6 +104,9 @@ async function openAndInit(): Promise<SQLiteDBConnection> {
     await connection.execute(SEED_EXERCISES_SQL);
     console.log('Seeded default exercises (first run)');
   }
+
+  // Run schema migrations (idempotent)
+  await runMigrations(connection);  
 
   console.log('Database initialized successfully');
   return connection;

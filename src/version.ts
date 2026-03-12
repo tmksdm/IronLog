@@ -5,7 +5,7 @@
  * Update this file with each release.
  */
 
-export const APP_VERSION = '0.11.4';
+export const APP_VERSION = '0.12.0';
 
 export interface ChangelogEntry {
   version: string;
@@ -14,6 +14,17 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '0.12.0',
+    date: '2026-03-12',
+    changes: [
+      'Программа бега: автоматическое планирование скорости по сегментам 3 км дистанции',
+      'Прогрессия/регрессия скорости на 1 км/ч по результатам каждой пробежки',
+      'Кнопки «Справился/Не справился» на экране кардио после тренировки',
+      'Настройка и сброс базовой скорости прямо на экране бега',
+    ],
+  },
+
   {
     version: '0.11.4',
     date: '2026-03-11',

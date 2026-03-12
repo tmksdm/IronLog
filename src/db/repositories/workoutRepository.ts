@@ -59,6 +59,7 @@ function mapCardioRow(row: any): CardioLog {
     type: row.type as CardioType,
     durationSeconds: row.duration_seconds,
     count: row.count,
+    succeeded: row.succeeded === 1 ? true : row.succeeded === 0 ? false : null,
   };
 }
 
@@ -411,14 +412,22 @@ export async function createCardioLog(data: {
   type: CardioType;
   durationSeconds: number | null;
   count: number | null;
+  succeeded: boolean | null;
 }): Promise<CardioLog> {
   const db = await getDb();
   const id = generateId();
 
   await db.run(
-    `INSERT INTO cardio_logs (id, workout_session_id, type, duration_seconds, count)
-     VALUES (?, ?, ?, ?, ?)`,
-    [id, data.workoutSessionId, data.type, data.durationSeconds, data.count]
+    `INSERT INTO cardio_logs (id, workout_session_id, type, duration_seconds, count, succeeded)
+     VALUES (?, ?, ?, ?, ?, ?)`,
+    [
+      id,
+      data.workoutSessionId,
+      data.type,
+      data.durationSeconds,
+      data.count,
+      data.succeeded === true ? 1 : data.succeeded === false ? 0 : null,
+    ]
   );
 
   await saveToStore();

@@ -62,6 +62,7 @@ export interface WorkoutState {
   cardioType: CardioType | null;
   jumpRopeCount: number | null;
   treadmillSeconds: number | null;
+  treadmillSucceeded: boolean | null;
   isCardioCompleted: boolean;
   _isRestoring: boolean;
 
@@ -81,7 +82,7 @@ export interface WorkoutState {
   skipExercise: (exerciseIndex: number) => void;
   unskipExercise: (exerciseIndex: number) => void;
   saveJumpRope: (count: number) => void;
-  saveTreadmill: (seconds: number) => void;
+  saveTreadmill: (seconds: number, succeeded: boolean | null) => void;
   clearCardio: () => void;
   setRestTimerDefault: (seconds: number) => void;
   startRestTimer: () => void;
@@ -114,6 +115,7 @@ function buildSnapshot(state: WorkoutState): WorkoutSnapshot | null {
     cardioType: state.cardioType,
     jumpRopeCount: state.jumpRopeCount,
     treadmillSeconds: state.treadmillSeconds,
+    treadmillSucceeded: state.treadmillSucceeded,
     isCardioCompleted: state.isCardioCompleted,
     restTimerDefault: state.restTimerDefault,
   };
@@ -165,6 +167,7 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
   cardioType: null,
   jumpRopeCount: null,
   treadmillSeconds: null,
+  treadmillSucceeded: null,
   isCardioCompleted: false,
   _isRestoring: false,
 
@@ -253,6 +256,7 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
         cardioType,
         jumpRopeCount: null,
         treadmillSeconds: null,
+        treadmillSucceeded: null,
         isCardioCompleted: false,
       });
 
@@ -275,6 +279,7 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
       cardioType: snapshot.cardioType,
       jumpRopeCount: snapshot.jumpRopeCount,
       treadmillSeconds: snapshot.treadmillSeconds,
+      treadmillSucceeded: snapshot.treadmillSucceeded ?? null,
       isCardioCompleted: snapshot.isCardioCompleted,
       restTimerDefault: snapshot.restTimerDefault,
       restTimerSeconds: 0,
@@ -380,6 +385,8 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
             state.cardioType === 'treadmill_3km' ? state.treadmillSeconds : null,
           count:
             state.cardioType === 'jump_rope' ? state.jumpRopeCount : null,
+          succeeded:
+            state.cardioType === 'treadmill_3km' ? state.treadmillSucceeded : null,
         });
       }
 
@@ -404,6 +411,7 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
         cardioType: null,
         jumpRopeCount: null,
         treadmillSeconds: null,
+        treadmillSucceeded: null,
         isCardioCompleted: false,
       });
 
@@ -441,6 +449,7 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
       cardioType: null,
       jumpRopeCount: null,
       treadmillSeconds: null,
+      treadmillSucceeded: null,      
       isCardioCompleted: false,
     });
   },
@@ -590,8 +599,8 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
     persistState(get());
   },
 
-  saveTreadmill: (seconds) => {
-    set({ treadmillSeconds: seconds, isCardioCompleted: true });
+  saveTreadmill: (seconds, succeeded) => {
+    set({ treadmillSeconds: seconds, treadmillSucceeded: succeeded, isCardioCompleted: true });
     persistState(get());
   },
 

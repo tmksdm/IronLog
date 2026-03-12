@@ -65,3 +65,17 @@ export {
   restoreFromBackup,
   type ImportPreview,
 } from './importData';
+
+export {
+  loadRunningProgram,
+  saveRunningProgram,
+  initRunningProgram,
+  applyRunResult,
+  updateRunningProgram,
+  buildRunPlan,
+  formatRunPlan,
+  getNextState,
+  SEGMENTS,
+  type RunningProgramState,
+  type RunSegment,
+} from './runningProgram';

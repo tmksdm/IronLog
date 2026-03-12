@@ -76,6 +76,7 @@ export default function SummaryStep({ onFinish, onBack, isSaving }: SummaryStepP
   const jumpRopeCount = useWorkoutStore((s) => s.jumpRopeCount);
   const treadmillSeconds = useWorkoutStore((s) => s.treadmillSeconds);
   const isCardioCompleted = useWorkoutStore((s) => s.isCardioCompleted);
+  const treadmillSucceeded = useWorkoutStore((s) => s.treadmillSucceeded);  
 
   // Weight after — default to weightBefore
   const [weightAfter, setWeightAfter] = useState<string>(
@@ -99,17 +100,23 @@ export default function SummaryStep({ onFinish, onBack, isSaving }: SummaryStepP
     onFinish(isNaN(parsed) || parsed <= 0 ? null : parsed);
   };
 
-  // Cardio result text
+    // Cardio result text
   const cardioResult = useMemo(() => {
     if (!isCardioCompleted) return null;
     if (cardioType === 'jump_rope' && jumpRopeCount !== null) {
       return `Скакалка: ${jumpRopeCount} прыжков`;
     }
     if (cardioType === 'treadmill_3km' && treadmillSeconds !== null) {
-      return `Бег 3 км: ${formatTimeMMSS(treadmillSeconds)}`;
+      const successText =
+        treadmillSucceeded === true
+          ? ' ✓'
+          : treadmillSucceeded === false
+            ? ' ✗'
+            : '';
+      return `Бег 3 км: ${formatTimeMMSS(treadmillSeconds)}${successText}`;
     }
     return null;
-  }, [isCardioCompleted, cardioType, jumpRopeCount, treadmillSeconds]);
+  }, [isCardioCompleted, cardioType, jumpRopeCount, treadmillSeconds, treadmillSucceeded]);
 
   return (
     <div className="flex flex-col gap-4 px-4">

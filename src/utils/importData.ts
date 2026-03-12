@@ -233,14 +233,15 @@ export async function restoreFromBackup(data: BackupData): Promise<void> {
       for (const c of data.cardioLogs) {
         await db.run(
           `INSERT INTO cardio_logs
-            (id, workout_session_id, type, duration_seconds, count)
-           VALUES (?, ?, ?, ?, ?)`,
+            (id, workout_session_id, type, duration_seconds, count, succeeded)
+           VALUES (?, ?, ?, ?, ?, ?)`,
           [
             c.id,
             c.workout_session_id,
             c.type,
             c.duration_seconds ?? null,
             c.count ?? null,
+            (c as any).succeeded ?? null,
           ]
         );
       }
