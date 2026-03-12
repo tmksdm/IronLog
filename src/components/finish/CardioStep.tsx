@@ -86,8 +86,10 @@ function JumpRopeInput({ onNext }: { onNext: () => void }) {
     onNext();
   };
 
-  // SVG ring for countdown
-  const radius = 70;
+  // SVG ring for countdown (matches RestTimer expanded size)
+  const RING_SIZE = 240;
+  const RING_STROKE = 12;
+  const radius = (RING_SIZE - RING_STROKE) / 2;
   const circumference = 2 * Math.PI * radius;
   const progress = secondsLeft / DURATION;
   const strokeDashoffset = circumference * (1 - progress);
@@ -99,32 +101,42 @@ function JumpRopeInput({ onNext }: { onNext: () => void }) {
         1 минута 15 секунд — посчитайте количество прыжков
       </p>
 
-      {/* Countdown timer ring */}
+      {/* Countdown timer ring — large, matching RestTimer size */}
       <div className="relative flex items-center justify-center">
-        <svg width="170" height="170" className="-rotate-90">
+        <svg
+          width={RING_SIZE}
+          height={RING_SIZE}
+          className="-rotate-90"
+        >
+          {/* Background ring */}
           <circle
-            cx="85" cy="85" r={radius}
+            cx={RING_SIZE / 2}
+            cy={RING_SIZE / 2}
+            r={radius}
             fill="none"
             stroke="#333333"
-            strokeWidth="6"
+            strokeWidth={RING_STROKE}
           />
+          {/* Progress ring */}
           <circle
-            cx="85" cy="85" r={radius}
+            cx={RING_SIZE / 2}
+            cy={RING_SIZE / 2}
+            r={radius}
             fill="none"
             stroke={hasFinished ? '#4CAF50' : '#FF9800'}
-            strokeWidth="6"
+            strokeWidth={RING_STROKE}
             strokeLinecap="round"
             strokeDasharray={circumference}
             strokeDashoffset={strokeDashoffset}
-            className="transition-all duration-1000 ease-linear"
+            className="transition-[stroke-dashoffset] duration-1000 linear"
           />
         </svg>
         <div className="absolute flex flex-col items-center">
-          <span className="text-4xl font-bold text-white font-mono">
+          <span className="text-7xl font-bold text-white font-mono">
             {formatTime(secondsLeft)}
           </span>
           {hasFinished && (
-            <span className="text-sm text-[#4CAF50] mt-1">Готово!</span>
+            <span className="text-base text-[#4CAF50] mt-2 font-semibold">Готово!</span>
           )}
         </div>
       </div>
