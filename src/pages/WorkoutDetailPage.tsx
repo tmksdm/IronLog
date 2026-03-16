@@ -20,7 +20,10 @@ import {
   Trash2,
 } from 'lucide-react';
 import { workoutRepo } from '../db';
+import { pullupRepo } from '../db';
 import type { WorkoutSession, ExerciseSummary, CardioLog } from '../types';
+import type { PullupLog } from '../types';
+import { getPullupDayName } from '../utils/pullupProgram';
 import {
   formatDate,
   formatWorkoutDuration,
@@ -46,6 +49,7 @@ export function WorkoutDetailPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [pullupLogs, setPullupLogs] = useState<PullupLog[]>([]);  
 
   useEffect(() => {
     if (!sessionId) {
@@ -60,10 +64,11 @@ export function WorkoutDetailPage() {
       setIsLoading(true);
       setError(null);
 
-      const [sess, summaries, cardio] = await Promise.all([
+      const [sess, summaries, cardio, pullups] = await Promise.all([
         workoutRepo.getWorkoutSessionById(id),
         workoutRepo.getSessionExerciseSummary(id),
         workoutRepo.getCardioBySession(id),
+        pullupRepo.getPullupsBySession(id),
       ]);
 
       if (!sess) {
@@ -75,6 +80,7 @@ export function WorkoutDetailPage() {
       setSession(sess);
       setExerciseSummaries(summaries);
       setCardioLogs(cardio);
+      setPullupLogs(pullups);      
     } catch (err) {
       console.error('Failed to load workout detail:', err);
       setError('Ошибка загрузки данных');
@@ -132,6 +138,23 @@ export function WorkoutDetailPage() {
     }
     return null;
   }, [cardioLogs]);
+
+  const pullupResultCard = useMemo(() => {
+    if (pullupLogs.length === 0) return null;
+    const first = pullupLogs[0]!;
+    if (first.skipped) return { text: 'Подтягивания: пропущено', skipped: true, totalReps: 0, sets: [] };
+    const dayName = getPullupDayName(
+      first.pullupDay as 1 | 2 | 3 | 4 | 5,
+      first.effectiveDay !== first.pullupDay ? (first.effectiveDay as 1 | 2 | 3 | 4) : undefined
+    );
+    const totalReps = pullupLogs.reduce((sum, l) => sum + l.reps, 0);
+    return {
+      text: `${dayName}: ${totalReps} повт.`,
+      skipped: false,
+      totalReps,
+      sets: pullupLogs,
+    };
+  }, [pullupLogs]);
 
   const exerciseCounts = useMemo(() => {
     let completed = 0;
@@ -302,6 +325,39 @@ export function WorkoutDetailPage() {
             <span className="text-sm text-white">{cardioResult}</span>
           </div>
         )}
+
+        {/* Pull-up result */}
+        {pullupResultCard && (
+          <div className="bg-[#252525] rounded-xl p-3 mt-3">
+            <div className="flex items-center gap-2 mb-2">
+              <Activity size={18} className="text-[#FF9800]" />
+              <span className="text-sm font-semibold text-white">
+                {pullupResultCard.text}
+              </span>
+            </div>
+            {!pullupResultCard.skipped && pullupResultCard.sets.length > 0 && (
+              <div className="ml-7 flex flex-wrap gap-1.5">
+                {pullupResultCard.sets.map((s, i) => (
+                  <div
+                    key={i}
+                    className={`px-2.5 py-1 rounded-lg text-xs font-semibold ${
+                      s.succeeded
+                        ? 'bg-[#4CAF50]/15 text-[#81C784]'
+                        : 'bg-[#FF9800]/15 text-[#FF9800]'
+                    }`}
+                  >
+                    {s.reps}
+                    {s.gripType && (
+                      <span className="text-[10px] opacity-70 ml-0.5">
+                        {s.gripType === 'normal' ? 'О' : s.gripType === 'reverse' ? 'Б' : 'Ш'}
+                      </span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}        
 
         {/* Exercise details */}
         <div className="mt-4">

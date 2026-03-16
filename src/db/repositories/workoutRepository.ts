@@ -201,6 +201,7 @@ export async function getAllSessions(
 export async function deleteWorkoutSession(sessionId: string): Promise<void> {
   const db = await getDb();
   await db.run('DELETE FROM cardio_logs WHERE workout_session_id = ?', [sessionId]);
+  await db.run('DELETE FROM pullup_logs WHERE workout_session_id = ?', [sessionId]);  
   await db.run('DELETE FROM exercise_logs WHERE workout_session_id = ?', [sessionId]);
   await db.run('DELETE FROM workout_sessions WHERE id = ?', [sessionId]);
   await saveToStore();
@@ -219,6 +220,7 @@ export async function deleteMultipleSessions(sessionIds: string[]): Promise<void
   const placeholders = sessionIds.map(() => '?').join(',');
 
   await db.run(`DELETE FROM cardio_logs WHERE workout_session_id IN (${placeholders})`, sessionIds);
+  await db.run(`DELETE FROM pullup_logs WHERE workout_session_id IN (${placeholders})`, sessionIds);  
   await db.run(`DELETE FROM exercise_logs WHERE workout_session_id IN (${placeholders})`, sessionIds);
   await db.run(`DELETE FROM workout_sessions WHERE id IN (${placeholders})`, sessionIds);
   await saveToStore();
@@ -235,6 +237,7 @@ export async function deleteMultipleSessions(sessionIds: string[]): Promise<void
 export async function deleteAllSessions(): Promise<void> {
   const db = await getDb();
   await db.run('DELETE FROM cardio_logs');
+  await db.run('DELETE FROM pullup_logs');  
   await db.run('DELETE FROM exercise_logs');
   await db.run('DELETE FROM workout_sessions');
   await saveToStore();
