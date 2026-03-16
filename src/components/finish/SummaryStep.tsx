@@ -8,7 +8,7 @@
 import { useState, useMemo } from 'react';
 import { useWorkoutStore } from '../../stores/workoutStore';
 import type { ActiveExercise } from '../../stores/workoutStore';
-import type { PullupStepResult } from './PullupStep';
+import type { PullupStepResult } from '../../types';
 import {
   Dumbbell,
   Clock,

@@ -112,6 +112,7 @@ export interface WorkoutSnapshot {
   treadmillSucceeded: boolean | null;
   isCardioCompleted: boolean;
   restTimerDefault: number;
+  pullupResult: PullupStepResult | null;  
 }
 
 // --- Analytics types ---
@@ -251,4 +252,19 @@ export interface YearlyPullups {
   year: number;
   totalReps: number;
   sessionCount: number;
+}
+
+export interface PullupStepResult {
+  dayNumber: 1 | 2 | 3 | 4 | 5;
+  effectiveDay: 1 | 2 | 3 | 4;
+  day5ActualDay: 1 | 2 | 3 | 4 | null;
+  sets: Array<{
+    setNumber: number;
+    reps: number;
+    grip: 'normal' | 'reverse' | 'wide' | null;
+    targetReps: number | null;
+    succeeded: boolean;
+  }>;
+  totalReps: number;
+  skipped: boolean;
 }

@@ -13,6 +13,7 @@ import type {
   WorkoutSnapshot,
   CardioType,
   Exercise,
+  PullupStepResult,
 } from '../types';
 import {
   exerciseRepo,
@@ -64,6 +65,7 @@ export interface WorkoutState {
   treadmillSeconds: number | null;
   treadmillSucceeded: boolean | null;
   isCardioCompleted: boolean;
+  pullupResult: PullupStepResult | null;
   _isRestoring: boolean;
 
   startWorkout: (
@@ -84,6 +86,7 @@ export interface WorkoutState {
   saveJumpRope: (count: number) => void;
   saveTreadmill: (seconds: number, succeeded: boolean | null) => void;
   clearCardio: () => void;
+  savePullupResult: (result: PullupStepResult | null) => void;
   setRestTimerDefault: (seconds: number) => void;
   startRestTimer: () => void;
   stopRestTimer: () => void;
@@ -118,6 +121,7 @@ function buildSnapshot(state: WorkoutState): WorkoutSnapshot | null {
     treadmillSucceeded: state.treadmillSucceeded,
     isCardioCompleted: state.isCardioCompleted,
     restTimerDefault: state.restTimerDefault,
+    pullupResult: state.pullupResult,
   };
 }
 
@@ -169,6 +173,7 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
   treadmillSeconds: null,
   treadmillSucceeded: null,
   isCardioCompleted: false,
+  pullupResult: null,
   _isRestoring: false,
 
   // =======================================
@@ -258,6 +263,7 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
         treadmillSeconds: null,
         treadmillSucceeded: null,
         isCardioCompleted: false,
+        pullupResult: null,
       });
 
       persistState(get());
@@ -282,6 +288,7 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
       treadmillSucceeded: snapshot.treadmillSucceeded ?? null,
       isCardioCompleted: snapshot.isCardioCompleted,
       restTimerDefault: snapshot.restTimerDefault,
+      pullupResult: snapshot.pullupResult ?? null,
       restTimerSeconds: 0,
       isRestTimerRunning: false,
       stopwatchSeconds: 0,
@@ -393,7 +400,7 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
       const finishedSession = await workoutRepo.getWorkoutSessionById(session.id);
       await workoutStateRepo.clearWorkoutState();
 
-      // Sync to cloud (fire and forget — don't block UI)
+      // Sync to cloud (fire and forget  don't block UI)
       pushToCloud().catch((err) =>
         console.error('Cloud sync after workout failed:', err)
       );
@@ -413,6 +420,7 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
         treadmillSeconds: null,
         treadmillSucceeded: null,
         isCardioCompleted: false,
+        pullupResult: null,
       });
 
       return finishedSession;
@@ -449,8 +457,9 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
       cardioType: null,
       jumpRopeCount: null,
       treadmillSeconds: null,
-      treadmillSucceeded: null,      
+      treadmillSucceeded: null,
       isCardioCompleted: false,
+      pullupResult: null,
     });
   },
 
@@ -606,6 +615,14 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
 
   clearCardio: () => {
     set({ jumpRopeCount: null, treadmillSeconds: null, isCardioCompleted: false });
+    persistState(get());
+  },
+
+  // =======================================
+  // PULLUPS
+  // =======================================
+  savePullupResult: (result) => {
+    set({ pullupResult: result });
     persistState(get());
   },
 

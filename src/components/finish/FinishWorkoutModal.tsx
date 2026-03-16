@@ -5,13 +5,13 @@
  * Step 1: Cardio → Step 2: Pull-ups → Step 3: Summary + save.
  */
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useWorkoutStore } from '../../stores/workoutStore';
 import { useAppStore } from '../../stores/appStore';
 import CardioStep from './CardioStep';
 import PullupStep from './PullupStep';
-import type { PullupStepResult } from './PullupStep';
+import type { PullupStepResult } from '../../types';
 import SummaryStep from './SummaryStep';
 import { pullupRepo } from '../../db';
 import { X } from 'lucide-react';
@@ -29,7 +29,18 @@ export default function FinishWorkoutModal({ isOpen, onClose }: FinishWorkoutMod
 
   const finishWorkout = useWorkoutStore((s) => s.finishWorkout);
   const session = useWorkoutStore((s) => s.session);
+  const savedPullupResult = useWorkoutStore((s) => s.pullupResult);
+  const savePullupResultToStore = useWorkoutStore((s) => s.savePullupResult);
   const refreshNextDayInfo = useAppStore((s) => s.refreshNextDayInfo);
+
+  // Restore pullup result from snapshot on mount
+  useEffect(() => {
+    if (isOpen && savedPullupResult && !pullupResult) {
+      setPullupResult(savedPullupResult);
+      // If we have a saved pullup result, go straight to summary
+      setStep(3);
+    }
+  }, [isOpen, savedPullupResult, pullupResult]);
 
   if (!isOpen || !session) return null;
 
@@ -39,6 +50,7 @@ export default function FinishWorkoutModal({ isOpen, onClose }: FinishWorkoutMod
 
   const handlePullupNext = (result: PullupStepResult) => {
     setPullupResult(result);
+    savePullupResultToStore(result);
     setStep(3);
   };
 

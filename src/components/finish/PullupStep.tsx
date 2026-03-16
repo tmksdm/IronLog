@@ -19,22 +19,13 @@ import {
   type PullupDayPlan,
   type PullupSetResult,
   type GripType,
-  type PullupDayNumber,
 } from '../../utils/pullupProgram';
+import type { PullupStepResult } from '../../types';
 import { Check, SkipForward, ChevronRight } from 'lucide-react';
 
 interface PullupStepProps {
   /** Called when pull-ups are done (completed or skipped). Passes result to parent. */
   onNext: (result: PullupStepResult) => void;
-}
-
-export interface PullupStepResult {
-  dayNumber: PullupDayNumber;
-  effectiveDay: 1 | 2 | 3 | 4;
-  day5ActualDay: 1 | 2 | 3 | 4 | null;
-  sets: PullupSetResult[];
-  totalReps: number;
-  skipped: boolean;
 }
 
 // ---- Rest Timer Component ----
@@ -451,12 +442,6 @@ function Day34Grips({
   };
 
   const handleFail = () => {
-    // Failed this set — record 0 reps (or could record partial, but spec says
-    // "if target is 6 and I do 5, that's a fail" — we record actual reps)
-    // For simplicity: fail = didn't do target, we record the set as failed with 0
-    // Actually, user won't do more than target, but might do less.
-    // Let's record as target-failed with 0 reps for now.
-    // The user said they won't do more than target. If they fail they just fail.
     const result: PullupSetResult = {
       setNumber: currentSet + 1,
       reps: 0,

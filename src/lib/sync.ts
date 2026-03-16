@@ -72,6 +72,21 @@ interface SupabaseCardioLog {
   succeeded: number | null;
 }
 
+interface SupabasePullupLog {
+  id: string;
+  user_id: string;
+  workout_session_id: string;
+  pullup_day: number;
+  effective_day: number;
+  set_number: number;
+  reps: number;
+  grip_type: string | null;
+  target_reps: number | null;
+  succeeded: number;
+  total_reps: number;
+  skipped: number;
+}
+
 // ==========================================
 // Get current user ID
 // ==========================================
@@ -216,6 +231,38 @@ export async function pushToCloud(): Promise<void> {
       if (error) throw new Error(`Push cardio_logs failed: ${error.message}`);
     }
 
+    // 5. Push pullup logs
+    const pullupResult = await db.query(
+      'SELECT * FROM pullup_logs ORDER BY workout_session_id, set_number'
+    );
+    const pullupLogs = (pullupResult.values ?? []) as any[];
+
+    if (pullupLogs.length > 0) {
+      const BATCH_SIZE = 500;
+      for (let i = 0; i < pullupLogs.length; i += BATCH_SIZE) {
+        const batch = pullupLogs.slice(i, i + BATCH_SIZE);
+        const rows: SupabasePullupLog[] = batch.map((p: any) => ({
+          id: p.id,
+          user_id: userId,
+          workout_session_id: p.workout_session_id,
+          pullup_day: p.pullup_day,
+          effective_day: p.effective_day,
+          set_number: p.set_number,
+          reps: p.reps,
+          grip_type: p.grip_type ?? null,
+          target_reps: p.target_reps ?? null,
+          succeeded: p.succeeded,
+          total_reps: p.total_reps,
+          skipped: p.skipped,
+        }));
+
+        const { error } = await supabase
+          .from('pullup_logs')
+          .upsert(rows, { onConflict: 'id' });
+        if (error) throw new Error(`Push pullup_logs batch failed: ${error.message}`);
+      }
+    }
+
     console.log('pushToCloud: success');
   } catch (error) {
     console.error('pushToCloud error:', error);
@@ -240,22 +287,25 @@ export async function pullFromCloud(): Promise<boolean> {
 
   try {
     // Fetch all data from Supabase
-    const [exercisesRes, sessionsRes, logsRes, cardioRes] = await Promise.all([
+    const [exercisesRes, sessionsRes, logsRes, cardioRes, pullupRes] = await Promise.all([
       supabase.from('exercises').select('*').eq('user_id', userId),
       supabase.from('workout_sessions').select('*').eq('user_id', userId),
       supabase.from('exercise_logs').select('*').eq('user_id', userId),
       supabase.from('cardio_logs').select('*').eq('user_id', userId),
+      supabase.from('pullup_logs').select('*').eq('user_id', userId),
     ]);
 
     if (exercisesRes.error) throw new Error(`Fetch exercises: ${exercisesRes.error.message}`);
     if (sessionsRes.error) throw new Error(`Fetch sessions: ${sessionsRes.error.message}`);
     if (logsRes.error) throw new Error(`Fetch logs: ${logsRes.error.message}`);
     if (cardioRes.error) throw new Error(`Fetch cardio: ${cardioRes.error.message}`);
+    if (pullupRes.error) throw new Error(`Fetch pullups: ${pullupRes.error.message}`);
 
     const exercises = exercisesRes.data ?? [];
     const sessions = sessionsRes.data ?? [];
     const logs = logsRes.data ?? [];
     const cardio = cardioRes.data ?? [];
+    const pullups = pullupRes.data ?? [];
 
     // If cloud is empty, don't wipe local data
     if (exercises.length === 0 && sessions.length === 0) {
@@ -270,6 +320,7 @@ export async function pullFromCloud(): Promise<boolean> {
     try {
       // Clear local data
       await db.execute('DELETE FROM active_workout_state;');
+      await db.execute('DELETE FROM pullup_logs;');
       await db.execute('DELETE FROM cardio_logs;');
       await db.execute('DELETE FROM exercise_logs;');
       await db.execute('DELETE FROM workout_sessions;');
@@ -332,6 +383,21 @@ export async function pullFromCloud(): Promise<boolean> {
           [c.id, c.workout_session_id, c.type, c.duration_seconds, c.count, (c as any).succeeded ?? null]
         );
       }
+
+      // Insert pullup logs
+      for (const p of pullups) {
+        await db.run(
+          `INSERT INTO pullup_logs
+            (id, workout_session_id, pullup_day, effective_day, set_number, reps,
+             grip_type, target_reps, succeeded, total_reps, skipped)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            p.id, p.workout_session_id, p.pullup_day, p.effective_day,
+            p.set_number, p.reps, p.grip_type ?? null, p.target_reps ?? null,
+            p.succeeded, p.total_reps, p.skipped,
+          ]
+        );
+      }
     } finally {
       await db.execute('PRAGMA foreign_keys = ON;');
       await saveToStore();
@@ -339,7 +405,8 @@ export async function pullFromCloud(): Promise<boolean> {
 
     console.log(
       `pullFromCloud: synced ${exercises.length} exercises, ` +
-      `${sessions.length} sessions, ${logs.length} logs, ${cardio.length} cardio`
+      `${sessions.length} sessions, ${logs.length} logs, ` +
+      `${cardio.length} cardio, ${pullups.length} pullups`
     );
     return true;
   } catch (error) {
@@ -361,14 +428,36 @@ export async function deleteSessionFromCloud(sessionId: string): Promise<void> {
   if (!userId) return;
 
   try {
-    // exercise_logs and cardio_logs have ON DELETE CASCADE in Supabase,
-    // so deleting the session will cascade-delete related logs
+    // Delete pullup_logs for this session
+    const { error: pullupError } = await supabase
+      .from('pullup_logs')
+      .delete()
+      .eq('workout_session_id', sessionId)
+      .eq('user_id', userId);
+    if (pullupError) console.error('deleteSessionFromCloud pullup_logs error:', pullupError.message);
+
+    // Delete cardio_logs for this session
+    const { error: cardioError } = await supabase
+      .from('cardio_logs')
+      .delete()
+      .eq('workout_session_id', sessionId)
+      .eq('user_id', userId);
+    if (cardioError) console.error('deleteSessionFromCloud cardio_logs error:', cardioError.message);
+
+    // Delete exercise_logs for this session
+    const { error: logsError } = await supabase
+      .from('exercise_logs')
+      .delete()
+      .eq('workout_session_id', sessionId)
+      .eq('user_id', userId);
+    if (logsError) console.error('deleteSessionFromCloud exercise_logs error:', logsError.message);
+
+    // Delete the session itself
     const { error } = await supabase
       .from('workout_sessions')
       .delete()
       .eq('id', sessionId)
       .eq('user_id', userId);
-
     if (error) console.error('deleteSessionFromCloud error:', error.message);
   } catch (error) {
     console.error('deleteSessionFromCloud error:', error);
@@ -411,6 +500,13 @@ export async function deleteAllSessionsFromCloud(): Promise<void> {
   if (!userId) return;
 
   try {
+    // Delete all pullup_logs for this user
+    const { error: pullupError } = await supabase
+      .from('pullup_logs')
+      .delete()
+      .eq('user_id', userId);
+    if (pullupError) console.error('deleteAllSessionsFromCloud pullup_logs error:', pullupError.message);
+
     // Delete all cardio_logs for this user
     const { error: cardioError } = await supabase
       .from('cardio_logs')
@@ -446,6 +542,14 @@ export async function deleteMultipleSessionsFromCloud(sessionIds: string[]): Pro
   if (!userId || sessionIds.length === 0) return;
 
   try {
+    // Delete pullup_logs
+    const { error: pullupError } = await supabase
+      .from('pullup_logs')
+      .delete()
+      .in('workout_session_id', sessionIds)
+      .eq('user_id', userId);
+    if (pullupError) console.error('deleteMultipleSessionsFromCloud pullup error:', pullupError.message);
+
     // Delete cardio_logs
     const { error: cardioError } = await supabase
       .from('cardio_logs')
@@ -475,4 +579,3 @@ export async function deleteMultipleSessionsFromCloud(sessionIds: string[]): Pro
     console.error('deleteMultipleSessionsFromCloud error:', error);
   }
 }
-
