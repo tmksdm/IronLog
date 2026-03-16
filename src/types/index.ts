@@ -221,3 +221,33 @@ export interface BackupData {
   exerciseLogs: Array<Record<string, unknown>>;
   cardioLogs: Array<Record<string, unknown>>;
 }
+
+// --- Pull-up system types ---
+
+export interface PullupLog {
+  id: string;
+  workoutSessionId: string;
+  pullupDay: number;        // 1–5
+  effectiveDay: number;     // 1–4 (resolved from day 5)
+  setNumber: number;
+  reps: number;
+  gripType: string | null;  // 'normal' | 'reverse' | 'wide' | null
+  targetReps: number | null;
+  succeeded: boolean;       // did this set meet target?
+  totalReps: number;        // total reps for the whole session (denormalized for easy queries)
+  skipped: boolean;         // entire pullup session was skipped
+}
+
+export interface MonthlyPullups {
+  year: number;
+  month: number;
+  label: string;
+  totalReps: number;
+  sessionCount: number;
+}
+
+export interface YearlyPullups {
+  year: number;
+  totalReps: number;
+  sessionCount: number;
+}

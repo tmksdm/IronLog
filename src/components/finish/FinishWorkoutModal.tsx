@@ -2,7 +2,7 @@
 
 /**
  * Multi-step finish workout modal (bottom sheet).
- * Step 1: Cardio input → Step 2: Summary + weight after + save.
+ * Step 1: Cardio → Step 2: Pull-ups → Step 3: Summary + save.
  */
 
 import { useState } from 'react';
@@ -10,7 +10,10 @@ import { useNavigate } from 'react-router-dom';
 import { useWorkoutStore } from '../../stores/workoutStore';
 import { useAppStore } from '../../stores/appStore';
 import CardioStep from './CardioStep';
+import PullupStep from './PullupStep';
+import type { PullupStepResult } from './PullupStep';
 import SummaryStep from './SummaryStep';
+import { pullupRepo } from '../../db';
 import { X } from 'lucide-react';
 
 interface FinishWorkoutModalProps {
@@ -19,8 +22,9 @@ interface FinishWorkoutModalProps {
 }
 
 export default function FinishWorkoutModal({ isOpen, onClose }: FinishWorkoutModalProps) {
-  const [step, setStep] = useState<1 | 2>(1);
+  const [step, setStep] = useState<1 | 2 | 3>(1);
   const [isSaving, setIsSaving] = useState(false);
+  const [pullupResult, setPullupResult] = useState<PullupStepResult | null>(null);
   const navigate = useNavigate();
 
   const finishWorkout = useWorkoutStore((s) => s.finishWorkout);
@@ -33,17 +37,34 @@ export default function FinishWorkoutModal({ isOpen, onClose }: FinishWorkoutMod
     setStep(2);
   };
 
-  const handleBackToCardio = () => {
-    setStep(1);
+  const handlePullupNext = (result: PullupStepResult) => {
+    setPullupResult(result);
+    setStep(3);
+  };
+
+  const handleBackToPullups = () => {
+    setStep(2);
   };
 
   const handleFinish = async (weightAfter: number | null) => {
     setIsSaving(true);
     try {
       const finishedSession = await finishWorkout(weightAfter);
+
+      // Save pull-up logs to DB
+      if (finishedSession && pullupResult) {
+        await pullupRepo.savePullupSession({
+          workoutSessionId: finishedSession.id,
+          pullupDay: pullupResult.dayNumber,
+          effectiveDay: pullupResult.effectiveDay,
+          sets: pullupResult.sets,
+          totalReps: pullupResult.totalReps,
+          skipped: pullupResult.skipped,
+        });
+      }
+
       await refreshNextDayInfo();
       if (finishedSession) {
-        // TODO: navigate to WorkoutSummaryPage when it's built
         navigate(`/summary/${finishedSession.id}`, { replace: true });
       }
     } catch (error) {
@@ -56,6 +77,7 @@ export default function FinishWorkoutModal({ isOpen, onClose }: FinishWorkoutMod
   const handleClose = () => {
     if (isSaving) return;
     setStep(1);
+    setPullupResult(null);
     onClose();
   };
 
@@ -68,7 +90,7 @@ export default function FinishWorkoutModal({ isOpen, onClose }: FinishWorkoutMod
       />
 
       {/* Bottom sheet */}
-      <div className="relative w-full max-w-[480px] bg-[#1E1E1E] rounded-t-2xl pb-8 pt-4 animate-slide-up max-h-[90vh] overflow-y-auto">
+      <div className="relative w-full max-w-120 bg-[#1E1E1E] rounded-t-2xl pb-8 pt-4 animate-slide-up max-h-[90vh] overflow-y-auto">
         {/* Drag handle */}
         <div className="flex justify-center mb-2">
           <div className="w-10 h-1 rounded-full bg-[#555555]" />
@@ -83,27 +105,27 @@ export default function FinishWorkoutModal({ isOpen, onClose }: FinishWorkoutMod
           <X size={18} className="text-[#B0B0B0]" />
         </button>
 
-        {/* Step indicator dots */}
+        {/* Step indicator dots — now 3 steps */}
         <div className="flex items-center justify-center gap-2 mb-4 mt-1">
-          <div
-            className={`w-2 h-2 rounded-full transition-colors ${
-              step === 1 ? 'bg-[#4CAF50]' : 'bg-[#555555]'
-            }`}
-          />
-          <div
-            className={`w-2 h-2 rounded-full transition-colors ${
-              step === 2 ? 'bg-[#4CAF50]' : 'bg-[#555555]'
-            }`}
-          />
+          {[1, 2, 3].map((s) => (
+            <div
+              key={s}
+              className={`w-2 h-2 rounded-full transition-colors ${
+                step === s ? 'bg-[#4CAF50]' : 'bg-[#555555]'
+              }`}
+            />
+          ))}
         </div>
 
         {/* Step content */}
         {step === 1 && <CardioStep onNext={handleCardioNext} />}
-        {step === 2 && (
+        {step === 2 && <PullupStep onNext={handlePullupNext} />}
+        {step === 3 && (
           <SummaryStep
             onFinish={handleFinish}
-            onBack={handleBackToCardio}
+            onBack={handleBackToPullups}
             isSaving={isSaving}
+            pullupResult={pullupResult}
           />
         )}
       </div>

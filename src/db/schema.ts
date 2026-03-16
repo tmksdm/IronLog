@@ -76,6 +76,21 @@ export const CREATE_TABLES_SQL = `
     updated_at TEXT NOT NULL
   );
 
+  CREATE TABLE IF NOT EXISTS pullup_logs (
+    id TEXT PRIMARY KEY,
+    workout_session_id TEXT NOT NULL,
+    pullup_day INTEGER NOT NULL,
+    effective_day INTEGER NOT NULL,
+    set_number INTEGER NOT NULL,
+    reps INTEGER NOT NULL DEFAULT 0,
+    grip_type TEXT,
+    target_reps INTEGER,
+    succeeded INTEGER NOT NULL DEFAULT 0,
+    total_reps INTEGER NOT NULL DEFAULT 0,
+    skipped INTEGER NOT NULL DEFAULT 0,
+    FOREIGN KEY (workout_session_id) REFERENCES workout_sessions(id)
+  );  
+
   CREATE INDEX IF NOT EXISTS idx_exercises_day_type
     ON exercises(day_type_id);
   CREATE INDEX IF NOT EXISTS idx_workout_sessions_day_type
@@ -88,6 +103,8 @@ export const CREATE_TABLES_SQL = `
     ON exercise_logs(exercise_id);
   CREATE INDEX IF NOT EXISTS idx_cardio_logs_session
     ON cardio_logs(workout_session_id);
+  CREATE INDEX IF NOT EXISTS idx_pullup_logs_session
+    ON pullup_logs(workout_session_id);    
 `;
 
 export const SEED_DAY_TYPES_SQL = `

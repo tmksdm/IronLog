@@ -54,6 +54,34 @@ async function runMigrations(connection: SQLiteDBConnection): Promise<void> {
       );
       console.log('Migration: added succeeded column to cardio_logs');
     }
+
+    // v0.13.0: Add pullup_logs table
+    const pullupTableCheck = await connection.query(
+      "SELECT name FROM sqlite_master WHERE type='table' AND name='pullup_logs'"
+    );
+    const hasPullupTable = (pullupTableCheck.values ?? []).length > 0;
+
+    if (!hasPullupTable) {
+      await connection.execute(`
+        CREATE TABLE IF NOT EXISTS pullup_logs (
+          id TEXT PRIMARY KEY,
+          workout_session_id TEXT NOT NULL,
+          pullup_day INTEGER NOT NULL,
+          effective_day INTEGER NOT NULL,
+          set_number INTEGER NOT NULL,
+          reps INTEGER NOT NULL DEFAULT 0,
+          grip_type TEXT,
+          target_reps INTEGER,
+          succeeded INTEGER NOT NULL DEFAULT 0,
+          total_reps INTEGER NOT NULL DEFAULT 0,
+          skipped INTEGER NOT NULL DEFAULT 0,
+          FOREIGN KEY (workout_session_id) REFERENCES workout_sessions(id)
+        );
+        CREATE INDEX IF NOT EXISTS idx_pullup_logs_session
+          ON pullup_logs(workout_session_id);
+      `);
+      console.log('Migration: created pullup_logs table');
+    }
   } catch (error) {
     console.error('Migration error:', error);
   }

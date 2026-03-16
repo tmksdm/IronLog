@@ -1,13 +1,14 @@
 // src/components/finish/SummaryStep.tsx
 
 /**
- * Step 2 of FinishWorkoutModal.
- * Post-workout weight input, summary of exercises, cardio result, save.
+ * Step 3 of FinishWorkoutModal.
+ * Post-workout weight input, summary of exercises, cardio result, pullup result, save.
  */
 
 import { useState, useMemo } from 'react';
 import { useWorkoutStore } from '../../stores/workoutStore';
 import type { ActiveExercise } from '../../stores/workoutStore';
+import type { PullupStepResult } from './PullupStep';
 import {
   Dumbbell,
   Clock,
@@ -18,11 +19,13 @@ import {
   CircleOff,
 } from 'lucide-react';
 import { formatWorkoutDuration, formatTimeMMSS } from '../../utils/format';
+import { getPullupDayName } from '../../utils/pullupProgram';
 
 interface SummaryStepProps {
   onFinish: (weightAfter: number | null) => void;
   onBack: () => void;
   isSaving: boolean;
+  pullupResult?: PullupStepResult | null;
 }
 
 const DAY_NAMES: Record<number, string> = {
@@ -69,7 +72,7 @@ function calculateTonnage(exercises: ActiveExercise[]): number {
   return total;
 }
 
-export default function SummaryStep({ onFinish, onBack, isSaving }: SummaryStepProps) {
+export default function SummaryStep({ onFinish, onBack, isSaving, pullupResult }: SummaryStepProps) {
   const session = useWorkoutStore((s) => s.session);
   const exercises = useWorkoutStore((s) => s.exercises);
   const cardioType = useWorkoutStore((s) => s.cardioType);
@@ -117,6 +120,17 @@ export default function SummaryStep({ onFinish, onBack, isSaving }: SummaryStepP
     }
     return null;
   }, [isCardioCompleted, cardioType, jumpRopeCount, treadmillSeconds, treadmillSucceeded]);
+
+  // Pull-up result text
+  const pullupResultText = useMemo(() => {
+    if (!pullupResult) return null;
+    if (pullupResult.skipped) return 'Подтягивания: пропущено';
+    const dayName = getPullupDayName(
+      pullupResult.dayNumber,
+      pullupResult.day5ActualDay ?? undefined
+    );
+    return `Подтягивания (${dayName}): ${pullupResult.totalReps} повт.`;
+  }, [pullupResult]);
 
   return (
     <div className="flex flex-col gap-4 px-4">
@@ -182,6 +196,14 @@ export default function SummaryStep({ onFinish, onBack, isSaving }: SummaryStepP
         <div className="bg-[#252525] rounded-xl p-3 flex items-center gap-2">
           <Activity size={18} className="text-[#81C784]" />
           <span className="text-sm text-white">{cardioResult}</span>
+        </div>
+      )}
+
+      {/* Pull-up result */}
+      {pullupResultText && (
+        <div className="bg-[#252525] rounded-xl p-3 flex items-center gap-2">
+          <Activity size={18} className="text-[#FF9800]" />
+          <span className="text-sm text-white">{pullupResultText}</span>
         </div>
       )}
 
