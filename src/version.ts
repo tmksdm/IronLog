@@ -5,7 +5,7 @@
  * Update this file with each release.
  */
 
-export const APP_VERSION = '0.12.0';
+export const APP_VERSION = '0.13.0';
 
 export interface ChangelogEntry {
   version: string;
@@ -14,6 +14,17 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '0.13.0',
+    date: '2026-03-16',
+    changes: [
+      'Система подтягиваний: 5-дневный цикл (максимумы, лесенка, три хвата, четыре хвата, повтор)',
+      'Интерактивное выполнение подтягиваний с таймером отдыха после кардио',
+      'Автоматическая прогрессия/регрессия целевых повторений',
+      'Отображение результатов подтягиваний в итогах и деталях тренировки',
+    ],
+  },  
+  
   {
     version: '0.12.0',
     date: '2026-03-12',
