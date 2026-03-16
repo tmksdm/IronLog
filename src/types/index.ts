@@ -220,6 +220,7 @@ export interface BackupData {
   workoutSessions: Array<Record<string, unknown>>;
   exerciseLogs: Array<Record<string, unknown>>;
   cardioLogs: Array<Record<string, unknown>>;
+  pullupLogs?: Array<Record<string, unknown>>;
 }
 
 // --- Pull-up system types ---
@@ -227,8 +228,8 @@ export interface BackupData {
 export interface PullupLog {
   id: string;
   workoutSessionId: string;
-  pullupDay: number;        // 1–5
-  effectiveDay: number;     // 1–4 (resolved from day 5)
+  pullupDay: number;        // 1‑5
+  effectiveDay: number;     // 1‑4 (resolved from day 5)
   setNumber: number;
   reps: number;
   gripType: string | null;  // 'normal' | 'reverse' | 'wide' | null

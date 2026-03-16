@@ -23,7 +23,7 @@ import type { BackupData } from '../types';
 export async function buildBackupData(): Promise<BackupData> {
   const db = await getDb();
 
-  const [dayTypes, exercises, sessions, logs, cardio] = await Promise.all([
+  const [dayTypes, exercises, sessions, logs, cardio, pullups] = await Promise.all([
     db.query('SELECT * FROM day_types ORDER BY id'),
     db.query('SELECT * FROM exercises ORDER BY day_type_id, sort_order'),
     db.query('SELECT * FROM workout_sessions ORDER BY date DESC'),
@@ -31,6 +31,9 @@ export async function buildBackupData(): Promise<BackupData> {
       'SELECT * FROM exercise_logs ORDER BY workout_session_id, exercise_id, set_number'
     ),
     db.query('SELECT * FROM cardio_logs ORDER BY workout_session_id'),
+    db.query(
+      'SELECT * FROM pullup_logs ORDER BY workout_session_id, set_number'
+    ),
   ]);
 
   return {
@@ -41,6 +44,7 @@ export async function buildBackupData(): Promise<BackupData> {
     workoutSessions: sessions.values ?? [],
     exerciseLogs: logs.values ?? [],
     cardioLogs: cardio.values ?? [],
+    pullupLogs: pullups.values ?? [],
   };
 }
 

@@ -5,7 +5,7 @@
  * Update this file with each release.
  */
 
-export const APP_VERSION = '0.13.0';
+export const APP_VERSION = '0.13.1';
 
 export interface ChangelogEntry {
   version: string;
@@ -14,6 +14,15 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '0.13.1',
+    date: '2026-03-16',
+    changes: [
+      'Аналитика подтягиваний: вкладка «Подтягивания» с месячными и годовыми графиками',
+      'Экспорт/импорт pullup_logs в JSON-бэкапах',
+    ],
+  },
+
   {
     version: '0.13.0',
     date: '2026-03-16',

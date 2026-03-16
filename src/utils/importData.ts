@@ -25,6 +25,7 @@ export interface ImportPreview {
   sessionCount: number;
   logCount: number;
   cardioCount: number;
+  pullupCount: number;
   dateRange: string;
   raw: BackupData;
 }
@@ -116,6 +117,7 @@ export function parseBackupJSON(jsonString: string): ImportPreview {
     sessionCount: data.workoutSessions.length,
     logCount: data.exerciseLogs.length,
     cardioCount: data.cardioLogs?.length ?? 0,
+    pullupCount: data.pullupLogs?.length ?? 0,
     dateRange,
     raw: data,
   };
@@ -142,6 +144,7 @@ export async function restoreFromBackup(data: BackupData): Promise<void> {
   try {
     // 1. Clear all existing data (order matters for FK constraints)
     await db.execute('DELETE FROM active_workout_state;');
+    await db.execute('DELETE FROM pullup_logs;');
     await db.execute('DELETE FROM cardio_logs;');
     await db.execute('DELETE FROM exercise_logs;');
     await db.execute('DELETE FROM workout_sessions;');
@@ -204,9 +207,7 @@ export async function restoreFromBackup(data: BackupData): Promise<void> {
       );
     }
 
-    // 4. Insert exercise logs in batches for speed
-    // @capacitor-community/sqlite doesn't support multi-row INSERT via run(),
-    // so we insert one by one but it's still fast inside a transaction.
+    // 4. Insert exercise logs
     for (const l of data.exerciseLogs) {
       await db.run(
         `INSERT INTO exercise_logs
@@ -242,6 +243,31 @@ export async function restoreFromBackup(data: BackupData): Promise<void> {
             c.duration_seconds ?? null,
             c.count ?? null,
             (c as any).succeeded ?? null,
+          ]
+        );
+      }
+    }
+
+    // 6. Insert pullup logs
+    if (data.pullupLogs && data.pullupLogs.length > 0) {
+      for (const p of data.pullupLogs) {
+        await db.run(
+          `INSERT INTO pullup_logs
+            (id, workout_session_id, pullup_day, effective_day, set_number,
+             reps, grip_type, target_reps, succeeded, total_reps, skipped)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            p.id,
+            p.workout_session_id,
+            p.pullup_day,
+            p.effective_day,
+            p.set_number,
+            p.reps,
+            p.grip_type ?? null,
+            p.target_reps ?? null,
+            p.succeeded ?? 0,
+            p.total_reps ?? 0,
+            p.skipped ?? 0,
           ]
         );
       }

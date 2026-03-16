@@ -51,6 +51,9 @@ export function ImportPreviewModal({
           <StatRow label="Упражнений" value={preview.exerciseCount.toString()} />
           <StatRow label="Записей подходов" value={preview.logCount.toString()} />
           <StatRow label="Записей кардио" value={preview.cardioCount.toString()} />
+          {preview.pullupCount > 0 && (
+            <StatRow label="Записей подтягиваний" value={preview.pullupCount.toString()} />
+          )}
           <StatRow label="Период" value={preview.dateRange} isLast />
         </div>
 
