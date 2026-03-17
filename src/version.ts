@@ -5,7 +5,7 @@
  * Update this file with each release.
  */
 
-export const APP_VERSION = '0.14.0';
+export const APP_VERSION = '0.14.1';
 
 export interface ChangelogEntry {
   version: string;
@@ -14,6 +14,18 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+
+  {
+    version: '0.14.1',
+    date: '2026-03-17',
+    changes: [
+      'Исправлена потеря данных кардио и подтягиваний при случайном закрытии модалки финиша',
+      'Модалка финиша запоминает прогресс: при повторном открытии продолжает с нужного шага',
+      'Заблокировано случайное закрытие модалки по тапу на фон',
+      'Добавлена кнопка «Назад к кардио» на шаге подтягиваний',
+    ],
+  },  
+
   {
     version: '0.14.0',
     date: '2026-03-16',

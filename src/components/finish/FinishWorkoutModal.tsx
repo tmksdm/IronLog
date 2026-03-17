@@ -3,9 +3,15 @@
 /**
  * Multi-step finish workout modal (bottom sheet).
  * Step 1: Cardio → Step 2: Pull-ups → Step 3: Summary + save.
+ *
+ * Preserves entered data across close/reopen:
+ * - Cardio data lives in workoutStore (jumpRopeCount, treadmillSeconds, etc.)
+ * - Pullup result is saved to workoutStore snapshot
+ * - On open, auto-advances to the appropriate step based on saved data
+ * - Backdrop clicks are ignored to prevent accidental dismissal
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useWorkoutStore } from '../../stores/workoutStore';
 import { useAppStore } from '../../stores/appStore';
@@ -22,25 +28,38 @@ interface FinishWorkoutModalProps {
 }
 
 export default function FinishWorkoutModal({ isOpen, onClose }: FinishWorkoutModalProps) {
-  const [step, setStep] = useState<1 | 2 | 3>(1);
   const [isSaving, setIsSaving] = useState(false);
   const [pullupResult, setPullupResult] = useState<PullupStepResult | null>(null);
   const navigate = useNavigate();
 
   const finishWorkout = useWorkoutStore((s) => s.finishWorkout);
   const session = useWorkoutStore((s) => s.session);
+  const isCardioCompleted = useWorkoutStore((s) => s.isCardioCompleted);
   const savedPullupResult = useWorkoutStore((s) => s.pullupResult);
   const savePullupResultToStore = useWorkoutStore((s) => s.savePullupResult);
   const refreshNextDayInfo = useAppStore((s) => s.refreshNextDayInfo);
 
-  // Restore pullup result from snapshot on mount
+  // Determine the correct starting step based on already-saved data
+  const determineStep = useCallback((): 1 | 2 | 3 => {
+    // If pullup result exists (from snapshot or current session), go to summary
+    if (savedPullupResult || pullupResult) return 3;
+    // If cardio already completed, skip to pullups
+    if (isCardioCompleted) return 2;
+    // Otherwise start from cardio
+    return 1;
+  }, [savedPullupResult, pullupResult, isCardioCompleted]);
+
+  const [step, setStep] = useState<1 | 2 | 3>(() => determineStep());
+
+  // When modal opens, restore pullup result from snapshot and set correct step
   useEffect(() => {
-    if (isOpen && savedPullupResult && !pullupResult) {
-      setPullupResult(savedPullupResult);
-      // If we have a saved pullup result, go straight to summary
-      setStep(3);
+    if (isOpen) {
+      if (savedPullupResult && !pullupResult) {
+        setPullupResult(savedPullupResult);
+      }
+      setStep(determineStep());
     }
-  }, [isOpen, savedPullupResult, pullupResult]);
+  }, [isOpen, savedPullupResult, pullupResult, determineStep]);
 
   if (!isOpen || !session) return null;
 
@@ -54,6 +73,10 @@ export default function FinishWorkoutModal({ isOpen, onClose }: FinishWorkoutMod
     setStep(3);
   };
 
+  const handleBackToCardio = () => {
+    setStep(1);
+  };
+
   const handleBackToPullups = () => {
     setStep(2);
   };
@@ -64,14 +87,15 @@ export default function FinishWorkoutModal({ isOpen, onClose }: FinishWorkoutMod
       const finishedSession = await finishWorkout(weightAfter);
 
       // Save pull-up logs to DB
-      if (finishedSession && pullupResult) {
+      const resultToSave = pullupResult ?? savedPullupResult;
+      if (finishedSession && resultToSave) {
         await pullupRepo.savePullupSession({
           workoutSessionId: finishedSession.id,
-          pullupDay: pullupResult.dayNumber,
-          effectiveDay: pullupResult.effectiveDay,
-          sets: pullupResult.sets,
-          totalReps: pullupResult.totalReps,
-          skipped: pullupResult.skipped,
+          pullupDay: resultToSave.dayNumber,
+          effectiveDay: resultToSave.effectiveDay,
+          sets: resultToSave.sets,
+          totalReps: resultToSave.totalReps,
+          skipped: resultToSave.skipped,
         });
       }
 
@@ -88,18 +112,14 @@ export default function FinishWorkoutModal({ isOpen, onClose }: FinishWorkoutMod
 
   const handleClose = () => {
     if (isSaving) return;
-    setStep(1);
-    setPullupResult(null);
+    // Don't reset step or pullupResult — data is preserved in store/snapshot
     onClose();
   };
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center">
-      {/* Backdrop */}
-      <div
-        className="absolute inset-0 bg-black/70 animate-fade-in"
-        onClick={handleClose}
-      />
+      {/* Backdrop — no onClick to prevent accidental dismissal */}
+      <div className="absolute inset-0 bg-black/70 animate-fade-in" />
 
       {/* Bottom sheet */}
       <div className="relative w-full max-w-120 bg-[#1E1E1E] rounded-t-2xl pb-8 pt-4 animate-slide-up max-h-[90vh] overflow-y-auto">
@@ -131,7 +151,9 @@ export default function FinishWorkoutModal({ isOpen, onClose }: FinishWorkoutMod
 
         {/* Step content */}
         {step === 1 && <CardioStep onNext={handleCardioNext} />}
-        {step === 2 && <PullupStep onNext={handlePullupNext} />}
+        {step === 2 && (
+          <PullupStep onNext={handlePullupNext} onBack={handleBackToCardio} />
+        )}
         {step === 3 && (
           <SummaryStep
             onFinish={handleFinish}

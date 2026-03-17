@@ -26,6 +26,8 @@ import { Check, SkipForward, ChevronRight } from 'lucide-react';
 interface PullupStepProps {
   /** Called when pull-ups are done (completed or skipped). Passes result to parent. */
   onNext: (result: PullupStepResult) => void;
+  /** Called to go back to the previous step (cardio). Only works before starting. */
+  onBack?: () => void;
 }
 
 // ---- Rest Timer Component ----
@@ -551,7 +553,7 @@ const DAY3_GRIPS_DEFAULT: GripType[] = [
 
 // ---- Main PullupStep Component ----
 
-export default function PullupStep({ onNext }: PullupStepProps) {
+export default function PullupStep({ onNext, onBack }: PullupStepProps) {
   const [programState] = useState<PullupProgramState>(() => loadPullupProgram());
   const plan = useMemo(() => buildDayPlan(programState), [programState]);
   const [started, setStarted] = useState(false);
@@ -622,6 +624,15 @@ export default function PullupStep({ onNext }: PullupStepProps) {
           <p className="text-sm text-[#B0B0B0]">{plan.description}</p>
         </div>
 
+        {onBack && (
+          <button
+            onClick={onBack}
+            className="w-full py-3 rounded-xl bg-[#2A2A2A] text-[#B0B0B0] font-semibold text-sm active:bg-[#333333] transition-colors mt-2"
+          >
+            ← Назад к кардио
+          </button>
+        )}
+
         <div className="flex gap-3 w-full mt-2">
           <button
             onClick={handleSkip}
@@ -642,6 +653,7 @@ export default function PullupStep({ onNext }: PullupStepProps) {
             </span>
           </button>
         </div>
+
       </div>
     );
   }
