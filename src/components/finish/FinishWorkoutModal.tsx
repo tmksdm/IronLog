@@ -4,11 +4,13 @@
  * Multi-step finish workout modal (bottom sheet).
  * Step 1: Cardio → Step 2: Pull-ups → Step 3: Summary + save.
  *
- * Preserves entered data across close/reopen:
- * - Cardio data lives in workoutStore (jumpRopeCount, treadmillSeconds, etc.)
- * - Pullup result is saved to workoutStore snapshot
+ * Data preservation strategy:
+ * - Cardio data lives in workoutStore (persisted to snapshot)
+ * - Pullup result is saved to workoutStore snapshot after completion
  * - On open, auto-advances to the appropriate step based on saved data
- * - Backdrop clicks are ignored to prevent accidental dismissal
+ * - Backdrop clicks are always ignored
+ * - Close button hidden during pull-ups (no way to save partial progress)
+ * - Close button shows confirmation on steps 1 and 3 if data was entered
  */
 
 import { useState, useEffect, useCallback } from 'react';
@@ -30,6 +32,7 @@ interface FinishWorkoutModalProps {
 export default function FinishWorkoutModal({ isOpen, onClose }: FinishWorkoutModalProps) {
   const [isSaving, setIsSaving] = useState(false);
   const [pullupResult, setPullupResult] = useState<PullupStepResult | null>(null);
+  const [showCloseConfirm, setShowCloseConfirm] = useState(false);
   const navigate = useNavigate();
 
   const finishWorkout = useWorkoutStore((s) => s.finishWorkout);
@@ -41,11 +44,8 @@ export default function FinishWorkoutModal({ isOpen, onClose }: FinishWorkoutMod
 
   // Determine the correct starting step based on already-saved data
   const determineStep = useCallback((): 1 | 2 | 3 => {
-    // If pullup result exists (from snapshot or current session), go to summary
     if (savedPullupResult || pullupResult) return 3;
-    // If cardio already completed, skip to pullups
     if (isCardioCompleted) return 2;
-    // Otherwise start from cardio
     return 1;
   }, [savedPullupResult, pullupResult, isCardioCompleted]);
 
@@ -58,10 +58,18 @@ export default function FinishWorkoutModal({ isOpen, onClose }: FinishWorkoutMod
         setPullupResult(savedPullupResult);
       }
       setStep(determineStep());
+      setShowCloseConfirm(false);
     }
   }, [isOpen, savedPullupResult, pullupResult, determineStep]);
 
   if (!isOpen || !session) return null;
+
+  // Check if user has entered any data worth protecting
+  const hasEnteredData = isCardioCompleted || !!pullupResult || !!savedPullupResult;
+
+  // On step 2 (pullups in progress), hide close button entirely —
+  // partial pullup progress can't be saved, so closing would lose data
+  const canClose = step !== 2;
 
   const handleCardioNext = () => {
     setStep(2);
@@ -110,9 +118,17 @@ export default function FinishWorkoutModal({ isOpen, onClose }: FinishWorkoutMod
     }
   };
 
-  const handleClose = () => {
-    if (isSaving) return;
-    // Don't reset step or pullupResult — data is preserved in store/snapshot
+  const handleCloseAttempt = () => {
+    if (isSaving || !canClose) return;
+    if (hasEnteredData) {
+      setShowCloseConfirm(true);
+    } else {
+      onClose();
+    }
+  };
+
+  const handleConfirmClose = () => {
+    setShowCloseConfirm(false);
     onClose();
   };
 
@@ -128,16 +144,46 @@ export default function FinishWorkoutModal({ isOpen, onClose }: FinishWorkoutMod
           <div className="w-10 h-1 rounded-full bg-[#555555]" />
         </div>
 
-        {/* Close button */}
-        <button
-          onClick={handleClose}
-          disabled={isSaving}
-          className="absolute top-4 right-4 w-8 h-8 rounded-full bg-[#2A2A2A] flex items-center justify-center active:bg-[#333333] transition-colors"
-        >
-          <X size={18} className="text-[#B0B0B0]" />
-        </button>
+        {/* Close button — hidden during pullups (step 2) */}
+        {canClose && (
+          <button
+            onClick={handleCloseAttempt}
+            disabled={isSaving}
+            className="absolute top-4 right-4 w-8 h-8 rounded-full bg-[#2A2A2A] flex items-center justify-center active:bg-[#333333] transition-colors"
+          >
+            <X size={18} className="text-[#B0B0B0]" />
+          </button>
+        )}
 
-        {/* Step indicator dots — now 3 steps */}
+        {/* Close confirmation overlay */}
+        {showCloseConfirm && (
+          <div className="absolute inset-0 z-10 bg-[#1E1E1E]/95 rounded-t-2xl flex items-center justify-center">
+            <div className="flex flex-col items-center gap-4 px-6 max-w-72">
+              <p className="text-base text-white font-semibold text-center">
+                Закрыть окно?
+              </p>
+              <p className="text-sm text-[#B0B0B0] text-center">
+                Данные сохранены — вы продолжите с того же места, нажав «Завершить» снова
+              </p>
+              <div className="flex gap-3 w-full mt-2">
+                <button
+                  onClick={() => setShowCloseConfirm(false)}
+                  className="flex-1 py-3.5 rounded-xl bg-[#4CAF50] text-white font-semibold text-base active:bg-[#388E3C] transition-colors"
+                >
+                  Остаться
+                </button>
+                <button
+                  onClick={handleConfirmClose}
+                  className="flex-1 py-3.5 rounded-xl bg-[#333333] text-[#B0B0B0] font-semibold text-base active:bg-[#444444] transition-colors"
+                >
+                  Закрыть
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Step indicator dots */}
         <div className="flex items-center justify-center gap-2 mb-4 mt-1">
           {[1, 2, 3].map((s) => (
             <div
