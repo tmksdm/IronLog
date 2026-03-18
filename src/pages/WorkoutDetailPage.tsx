@@ -456,7 +456,7 @@ function ExerciseDetailCard({ summary, dayColor }: ExerciseDetailCardProps) {
           style={{ backgroundColor: dayColor }}
         />
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-semibold text-white truncate">{exerciseName}</p>
+          <p className="text-sm font-semibold text-white">{exerciseName}</p>
         </div>
       </div>
 

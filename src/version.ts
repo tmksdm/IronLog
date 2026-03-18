@@ -5,7 +5,7 @@
  * Update this file with each release.
  */
 
-export const APP_VERSION = '0.16.1';
+export const APP_VERSION = '0.16.2';
 
 export interface ChangelogEntry {
   version: string;
@@ -14,6 +14,15 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+
+  {
+    version: '0.16.2',
+    date: '2026-03-18',
+    changes: [
+      'Исправлено: дублирующаяся подписка на pullupResult в ActiveWorkoutPage',
+      'Исправлено: имена упражнений больше не обрезаются в деталях тренировки',
+    ],
+  },
 
   {
     version: '0.16.1',

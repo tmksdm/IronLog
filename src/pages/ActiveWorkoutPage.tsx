@@ -55,7 +55,6 @@ export function ActiveWorkoutPage() {
   const treadmillSucceeded = useWorkoutStore((s) => s.treadmillSucceeded);
   const cardioType = useWorkoutStore((s) => s.cardioType);
   const pullupResult = useWorkoutStore((s) => s.pullupResult);
-  const savedPullupResult = useWorkoutStore((s) => s.pullupResult);
   const savePullupResultToStore = useWorkoutStore((s) => s.savePullupResult);
 
   const refreshNextDayInfo = useAppStore((s) => s.refreshNextDayInfo);
@@ -183,7 +182,7 @@ export function ActiveWorkoutPage() {
 
         if (finishedSession) {
           // Save pull-up logs to DB
-          const resultToSave = pullupResult ?? savedPullupResult;
+          const resultToSave = pullupResult;
           if (resultToSave) {
             await pullupRepo.savePullupSession({
               workoutSessionId: finishedSession.id,
@@ -229,7 +228,6 @@ export function ActiveWorkoutPage() {
     [
       finishWorkout,
       pullupResult,
-      savedPullupResult,
       isCardioCompleted,
       cardioType,
       treadmillSucceeded,
