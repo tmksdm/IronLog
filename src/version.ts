@@ -5,7 +5,7 @@
  * Update this file with each release.
  */
 
-export const APP_VERSION = '0.16.0';
+export const APP_VERSION = '0.16.1';
 
 export interface ChangelogEntry {
   version: string;
@@ -14,6 +14,14 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+
+  {
+    version: '0.16.1',
+    date: '2026-03-18',
+    changes: [
+      'Исправлено: удаление тренировки теперь откатывает прогрессию подтягиваний и программы бега',
+    ],
+  },
 
   {
     version: '0.16.0',

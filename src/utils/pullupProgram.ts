@@ -376,6 +376,69 @@ export function applyAndSaveDayResult(result: PullupDayResult): PullupProgramSta
 }
 
 /**
+ * Reverse the effect of a completed pull-up day on the program state.
+ * Used when deleting the last workout to undo progression.
+ *
+ * This is the inverse of applyDayResult():
+ *   - Moves currentDay backward by 1 in the cycle
+ *   - Reverses day5Rotation if the deleted day was day 5
+ *   - Reverses target reps changes for days 3/4
+ */
+export function reverseDayResult(
+  state: PullupProgramState,
+  result: PullupDayResult
+): PullupProgramState {
+  if (result.skipped) {
+    // Skipped sessions don't change state, nothing to reverse
+    return state;
+  }
+
+  // Reverse day advancement: current day was advanced AFTER the result,
+  // so we need to go back. currentDay is where we ARE now (next day).
+  // The day that was completed = previous day in cycle.
+  let prevDay: PullupDayNumber = ((((state.currentDay - 1) - 1 + 5) % 5) + 1) as PullupDayNumber;
+  let prevDay5Rotation = state.day5Rotation;
+
+  // If the completed day was day 5, day5Rotation was advanced too
+  if (prevDay === 5) {
+    prevDay5Rotation = ((((state.day5Rotation - 1) - 1 + 4) % 4) + 1) as 1 | 2 | 3 | 4;
+  }
+
+  // Reverse target reps changes
+  let { day3TargetReps, day4TargetReps } = state;
+  const effectiveDay = result.day5ActualDay ?? result.dayNumber;
+
+  if (effectiveDay === 3) {
+    const completedSets = result.sets.filter((s) => s.succeeded).length;
+    if (completedSets < DAY3_MIN_COMPLETED) {
+      // Was decreased — restore by adding 1
+      day3TargetReps += 1;
+    }
+  }
+
+  if (effectiveDay === 4) {
+    const completedSets = result.sets.filter((s) => s.succeeded).length;
+    if (completedSets < DAY4_MIN_COMPLETED) {
+      // Was decreased — restore
+      day4TargetReps += 1;
+    } else if (completedSets >= DAY4_TOTAL_SETS) {
+      // Both were increased — restore by subtracting
+      day3TargetReps = Math.max(1, day3TargetReps - 1);
+      day4TargetReps = Math.max(1, day4TargetReps - 1);
+    }
+  }
+
+  return {
+    currentDay: prevDay,
+    day5Rotation: prevDay5Rotation,
+    day3TargetReps,
+    day4TargetReps,
+  };
+}
+
+
+
+/**
  * Manually override the program state (for settings / debugging).
  */
 export function resetPullupProgram(overrides?: Partial<PullupProgramState>): PullupProgramState {

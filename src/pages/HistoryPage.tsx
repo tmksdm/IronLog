@@ -35,6 +35,10 @@ import {
 import { getDayTypeColor, DAY_TYPE_NAMES_RU } from '../theme';
 import { ConfirmModal } from '../components/workout';
 import { useAppStore } from '../stores/appStore';
+import {
+  rollbackProgressionForMultipleSessions,
+  rollbackProgressionForAllSessions,
+} from '../utils/rollbackProgression';
 
 
 // Filter options
@@ -244,11 +248,13 @@ export function HistoryPage() {
     const ids = Array.from(selectedIds);
     if (ids.length === 0) return;
     try {
+      // Rollback progression BEFORE deleting (while DB data still exists)
+      await rollbackProgressionForMultipleSessions(ids);
       await workoutRepo.deleteMultipleSessions(ids);
       setDeleteConfirm(null);
       exitSelectionMode();
       await loadSessions();
-      await refreshNextDayInfo();      
+      await refreshNextDayInfo();
     } catch (err) {
       console.error('Failed to delete sessions:', err);
     }
@@ -256,11 +262,13 @@ export function HistoryPage() {
 
   async function handleDeleteAll() {
     try {
+      // Reset all progressions since everything is being deleted
+      await rollbackProgressionForAllSessions();
       await workoutRepo.deleteAllSessions();
       setDeleteConfirm(null);
       exitSelectionMode();
       await loadSessions();
-      await refreshNextDayInfo();      
+      await refreshNextDayInfo();
     } catch (err) {
       console.error('Failed to delete all sessions:', err);
     }
@@ -445,9 +453,9 @@ export function HistoryPage() {
       {isSelecting && (
         <div
           className="fixed bottom-16 left-0 right-0 z-30 px-5 pb-3 pt-3
-                     bg-gradient-to-t from-[#121212] via-[#121212] to-transparent"
+                     bg-linear-to-t from-[#121212] via-[#121212] to-transparent"
         >
-          <div className="flex gap-3 max-w-[480px] mx-auto">
+          <div className="flex gap-3 max-w-120 mx-auto">
             <button
               onClick={() => setDeleteConfirm({ type: 'all' })}
               className="flex-1 py-3 rounded-xl bg-[#1E1E1E] border border-[#F44336]/40

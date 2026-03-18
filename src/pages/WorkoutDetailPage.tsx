@@ -36,6 +36,8 @@ import { getDayTypeColor, getDayTypeTextClass, DAY_TYPE_NAMES_RU } from '../them
 import { LoadingScreen } from '../components/ui';
 import { ConfirmModal } from '../components/workout';
 import { useAppStore } from '../stores/appStore';
+import { rollbackProgressionForSession } from '../utils/rollbackProgression';
+
 
 
 export function WorkoutDetailPage() {
@@ -92,8 +94,10 @@ export function WorkoutDetailPage() {
   async function handleDelete() {
     if (!sessionId) return;
     try {
+      // Rollback progression BEFORE deleting (while DB data still exists)
+      await rollbackProgressionForSession(sessionId);
       await workoutRepo.deleteWorkoutSession(sessionId);
-      await refreshNextDayInfo();      
+      await refreshNextDayInfo();
       navigate('/history', { replace: true });
     } catch (err) {
       console.error('Failed to delete workout:', err);

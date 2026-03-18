@@ -485,3 +485,117 @@ export function formatRunPlan(state: RunningProgramState): string {
     .map((seg) => `${seg.distanceM} м → ${seg.speedKmh} км/ч`)
     .join(', ');
 }
+
+
+
+/**
+ * Reverse the effect of a run result on the program state.
+ * This is the inverse of getNextState().
+ * Used when deleting the last workout to undo progression.
+ */
+export function reverseRunResult(succeeded: boolean): RunningProgramState | null {
+  const current = loadRunningProgram();
+  if (!current) return null;
+  const prev = getPreviousState(current, succeeded);
+  saveRunningProgram(prev);
+  return prev;
+}
+
+/**
+ * Calculate the previous program state (inverse of getNextState).
+ *
+ * If succeeded was true, we need to undo a success:
+ *   - If uniform now → was all at endSpeed that got promoted → restore: mainSpeed-1, endSpeed=mainSpeed, endSegments=8-1=7... no.
+ *     Actually: if uniform at X, and last action was success that promoted,
+ *     then before promotion state was: mainSpeed=X-1, endSpeed=X, endSegments=7 (about to become 8→promote).
+ *     Wait, endSegments=8 triggers promotion. So previous was endSegments=NUM_SEGMENTS-1=7, endSpeed=X, mainSpeed=X-1.
+ *     But actually when endSegments reaches 8 it becomes uniform. So the step before was endSegments=7.
+ *     Actually the promotion happens when endSegments+1 >= NUM_SEGMENTS. So previous had endSegments = NUM_SEGMENTS - 1.
+ *
+ *   - If end is faster (endSpeed > mainSpeed) → last success added one fast segment → endSegments - 1
+ *     If endSegments would become 0 → was uniform, success started adding → mainSpeed same, endSpeed=null, endSegments=0
+ *
+ *   - If end is slower (endSpeed < mainSpeed) → last success removed one slow segment → endSegments + 1
+ *     But endSegments+1 might exceed 7... Let's cap at NUM_SEGMENTS-1 since 8 would have demoted.
+ *
+ * If succeeded was false, we need to undo a failure (symmetric logic).
+ */
+export function getPreviousState(
+  current: RunningProgramState,
+  succeeded: boolean
+): RunningProgramState {
+  const { mainSpeed, endSpeed, endSegments } = current;
+
+  if (succeeded) {
+    // Undo a SUCCESS
+    if (endSegments === 0) {
+      // Uniform now. Two possibilities for how we got here via success:
+      // 1. Was uniform at mainSpeed-1 with endSegments=NUM_SEGMENTS-1 at mainSpeed → promoted
+      // 2. Was uniform at mainSpeed with endSpeed < mainSpeed, endSegments=1 → removed last slow segment
+      // We can't know which one, but promotion (case 1) is more likely when
+      // the previous success would have made endSegments reach NUM_SEGMENTS.
+      // Heuristic: if mainSpeed > 1, assume promotion happened.
+      if (endSpeed === null) {
+        // Most likely: was progressing and all segments became fast → promoted
+        return {
+          mainSpeed: mainSpeed - 1,
+          endSpeed: mainSpeed,
+          endSegments: NUM_SEGMENTS - 1,
+        };
+      }
+    }
+
+    if (endSpeed !== null && endSpeed > mainSpeed) {
+      // End is faster → last success added a fast segment → undo: remove one
+      if (endSegments - 1 <= 0) {
+        return { mainSpeed, endSpeed: null, endSegments: 0 };
+      }
+      return { mainSpeed, endSpeed, endSegments: endSegments - 1 };
+    }
+
+    if (endSpeed !== null && endSpeed < mainSpeed) {
+      // End is slower → last success removed a slow segment → undo: add one back
+      return { mainSpeed, endSpeed, endSegments: endSegments + 1 };
+    }
+
+    // Fallback: uniform with no endSpeed → undo promotion
+    return {
+      mainSpeed: mainSpeed - 1,
+      endSpeed: mainSpeed,
+      endSegments: NUM_SEGMENTS - 1,
+    };
+  } else {
+    // Undo a FAILURE
+    if (endSegments === 0) {
+      // Uniform now. Via failure this means:
+      // Was regressing and all segments became slow → demoted
+      if (endSpeed === null) {
+        return {
+          mainSpeed: mainSpeed + 1,
+          endSpeed: mainSpeed,
+          endSegments: NUM_SEGMENTS - 1,
+        };
+      }
+    }
+
+    if (endSpeed !== null && endSpeed < mainSpeed) {
+      // End is slower → last failure added a slow segment → undo: remove one
+      if (endSegments - 1 <= 0) {
+        return { mainSpeed, endSpeed: null, endSegments: 0 };
+      }
+      return { mainSpeed, endSpeed, endSegments: endSegments - 1 };
+    }
+
+    if (endSpeed !== null && endSpeed > mainSpeed) {
+      // End is faster → last failure removed a fast segment → undo: add one back
+      return { mainSpeed, endSpeed, endSegments: endSegments + 1 };
+    }
+
+    // Fallback: uniform with no endSpeed → undo demotion
+    return {
+      mainSpeed: mainSpeed + 1,
+      endSpeed: mainSpeed,
+      endSegments: NUM_SEGMENTS - 1,
+    };
+  }
+}
