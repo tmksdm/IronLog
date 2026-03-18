@@ -3,6 +3,10 @@
 /**
  * Step 1 of FinishWorkoutModal.
  * Cardio input: jump rope (countdown timer + count) or treadmill 3km (time + run program).
+ *
+ * NOTE: Run program progression is NOT applied here.
+ * It is deferred to FinishWorkoutModal.handleFinish() so that
+ * deleting a test workout doesn't leave stale progression in localStorage.
  */
 
 import { useState, useRef, useEffect, useCallback } from 'react';
@@ -10,8 +14,8 @@ import { useWorkoutStore } from '../../stores/workoutStore';
 import {
   loadRunningProgram,
   initRunningProgram,
-  applyRunResult,
   formatRunPlan,
+  saveRunningProgram,
   type RunningProgramState,
 } from '../../utils/runningProgram';
 import { Play, Square, Timer, Check, X, Settings2 } from 'lucide-react';
@@ -226,13 +230,8 @@ function TreadmillInput({ onNext }: { onNext: () => void }) {
   };
 
   const handleSave = () => {
-    // Apply run result to program if we have a program and a result
-    if (programState && succeeded !== null) {
-      const newState = applyRunResult(succeeded);
-      if (newState) {
-        setProgramState(newState);
-      }
-    }
+    // Just save time + result to the store.
+    // Run program progression is applied later in FinishWorkoutModal.handleFinish().
     saveTreadmill(totalSeconds, succeeded);
     onNext();
   };
@@ -265,9 +264,7 @@ function TreadmillInput({ onNext }: { onNext: () => void }) {
         endSpeed: null,
         endSegments: 0,
       };
-      import('../../utils/runningProgram').then(({ saveRunningProgram }) => {
-        saveRunningProgram(newState);
-      });
+      saveRunningProgram(newState);
       setProgramState(newState);
     } else {
       const state = initRunningProgram(speed);

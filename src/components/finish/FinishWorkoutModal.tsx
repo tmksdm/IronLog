@@ -11,6 +11,10 @@
  * - Backdrop clicks are always ignored
  * - Close button hidden during pull-ups (no way to save partial progress)
  * - Close button shows confirmation on steps 1 and 3 if data was entered
+ *
+ * IMPORTANT: All program progression (running + pullups) is applied HERE
+ * in handleFinish(), AFTER the workout is successfully saved to DB.
+ * This prevents stale progression if a test workout is later deleted.
  */
 
 import { useState, useEffect, useCallback } from 'react';
@@ -22,6 +26,8 @@ import PullupStep from './PullupStep';
 import type { PullupStepResult } from '../../types';
 import SummaryStep from './SummaryStep';
 import { pullupRepo } from '../../db';
+import { applyRunResult } from '../../utils/runningProgram';
+import { applyAndSaveDayResult } from '../../utils/pullupProgram';
 import { X } from 'lucide-react';
 
 interface FinishWorkoutModalProps {
@@ -38,6 +44,8 @@ export default function FinishWorkoutModal({ isOpen, onClose }: FinishWorkoutMod
   const finishWorkout = useWorkoutStore((s) => s.finishWorkout);
   const session = useWorkoutStore((s) => s.session);
   const isCardioCompleted = useWorkoutStore((s) => s.isCardioCompleted);
+  const treadmillSucceeded = useWorkoutStore((s) => s.treadmillSucceeded);
+  const cardioType = useWorkoutStore((s) => s.cardioType);
   const savedPullupResult = useWorkoutStore((s) => s.pullupResult);
   const savePullupResultToStore = useWorkoutStore((s) => s.savePullupResult);
   const refreshNextDayInfo = useAppStore((s) => s.refreshNextDayInfo);
@@ -94,21 +102,39 @@ export default function FinishWorkoutModal({ isOpen, onClose }: FinishWorkoutMod
     try {
       const finishedSession = await finishWorkout(weightAfter);
 
-      // Save pull-up logs to DB
-      const resultToSave = pullupResult ?? savedPullupResult;
-      if (finishedSession && resultToSave) {
-        await pullupRepo.savePullupSession({
-          workoutSessionId: finishedSession.id,
-          pullupDay: resultToSave.dayNumber,
-          effectiveDay: resultToSave.effectiveDay,
-          sets: resultToSave.sets,
-          totalReps: resultToSave.totalReps,
-          skipped: resultToSave.skipped,
-        });
-      }
-
-      await refreshNextDayInfo();
       if (finishedSession) {
+        // Save pull-up logs to DB
+        const resultToSave = pullupResult ?? savedPullupResult;
+        if (resultToSave) {
+          await pullupRepo.savePullupSession({
+            workoutSessionId: finishedSession.id,
+            pullupDay: resultToSave.dayNumber,
+            effectiveDay: resultToSave.effectiveDay,
+            sets: resultToSave.sets,
+            totalReps: resultToSave.totalReps,
+            skipped: resultToSave.skipped,
+          });
+        }
+
+        // --- Apply program progressions AFTER successful save ---
+
+        // Running program: apply result if treadmill cardio was completed
+        if (isCardioCompleted && cardioType === 'treadmill_3km' && treadmillSucceeded !== null) {
+          applyRunResult(treadmillSucceeded);
+        }
+
+        // Pull-up program: apply day result (progression/regression/advance)
+        if (resultToSave) {
+          applyAndSaveDayResult({
+            dayNumber: resultToSave.dayNumber,
+            day5ActualDay: resultToSave.day5ActualDay,
+            sets: resultToSave.sets,
+            totalReps: resultToSave.totalReps,
+            skipped: resultToSave.skipped,
+          });
+        }
+
+        await refreshNextDayInfo();
         navigate(`/summary/${finishedSession.id}`, { replace: true });
       }
     } catch (error) {

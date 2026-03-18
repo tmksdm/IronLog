@@ -4,13 +4,16 @@
  * Pull-up step in FinishWorkoutModal.
  * Shown between Cardio and Summary steps.
  * Handles all 5 pull-up day types with interactive set tracking and rest timers.
+ *
+ * NOTE: Pull-up program progression is NOT applied here.
+ * It is deferred to FinishWorkoutModal.handleFinish() so that
+ * deleting a test workout doesn't leave stale progression in localStorage.
  */
 
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   loadPullupProgram,
   buildDayPlan,
-  applyAndSaveDayResult,
   calculateTotalReps,
   getLadderRestTime,
   getGripName,
@@ -570,15 +573,7 @@ export default function PullupStep({ onNext, onBack }: PullupStepProps) {
       skipped: false,
     };
 
-    // Apply progression/regression
-    applyAndSaveDayResult({
-      dayNumber: plan.dayNumber,
-      day5ActualDay: plan.day5ActualDay,
-      sets,
-      totalReps,
-      skipped: false,
-    });
-
+    // Progression is applied later in FinishWorkoutModal.handleFinish()
     onNext(result);
   };
 
@@ -592,16 +587,7 @@ export default function PullupStep({ onNext, onBack }: PullupStepProps) {
       skipped: true,
     };
 
-    // Do NOT apply progression — day stays the same
-    // (applyDayResult with skipped=true won't advance)
-    applyAndSaveDayResult({
-      dayNumber: plan.dayNumber,
-      day5ActualDay: plan.day5ActualDay,
-      sets: [],
-      totalReps: 0,
-      skipped: true,
-    });
-
+    // Progression is applied later in FinishWorkoutModal.handleFinish()
     onNext(result);
   };
 
