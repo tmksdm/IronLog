@@ -1,7 +1,7 @@
 // src/components/finish/SummaryStep.tsx
 
 /**
- * Step 3 of FinishWorkoutModal.
+ * Summary tab in post-workout flow.
  * Post-workout weight input, summary of exercises, cardio result, pullup result, save.
  */
 
@@ -23,7 +23,6 @@ import { getPullupDayName } from '../../utils/pullupProgram';
 
 interface SummaryStepProps {
   onFinish: (weightAfter: number | null) => void;
-  onBack: () => void;
   isSaving: boolean;
   pullupResult?: PullupStepResult | null;
 }
@@ -72,14 +71,14 @@ function calculateTonnage(exercises: ActiveExercise[]): number {
   return total;
 }
 
-export default function SummaryStep({ onFinish, onBack, isSaving, pullupResult }: SummaryStepProps) {
+export default function SummaryStep({ onFinish, isSaving, pullupResult }: SummaryStepProps) {
   const session = useWorkoutStore((s) => s.session);
   const exercises = useWorkoutStore((s) => s.exercises);
   const cardioType = useWorkoutStore((s) => s.cardioType);
   const jumpRopeCount = useWorkoutStore((s) => s.jumpRopeCount);
   const treadmillSeconds = useWorkoutStore((s) => s.treadmillSeconds);
   const isCardioCompleted = useWorkoutStore((s) => s.isCardioCompleted);
-  const treadmillSucceeded = useWorkoutStore((s) => s.treadmillSucceeded);  
+  const treadmillSucceeded = useWorkoutStore((s) => s.treadmillSucceeded);
 
   // Weight after — default to weightBefore
   const [weightAfter, setWeightAfter] = useState<string>(
@@ -103,7 +102,7 @@ export default function SummaryStep({ onFinish, onBack, isSaving, pullupResult }
     onFinish(isNaN(parsed) || parsed <= 0 ? null : parsed);
   };
 
-    // Cardio result text
+  // Cardio result text
   const cardioResult = useMemo(() => {
     if (!isCardioCompleted) return null;
     if (cardioType === 'jump_rope' && jumpRopeCount !== null) {
@@ -125,15 +124,15 @@ export default function SummaryStep({ onFinish, onBack, isSaving, pullupResult }
   const pullupResultText = useMemo(() => {
     if (!pullupResult) return null;
     if (pullupResult.skipped) return 'Подтягивания: пропущено';
-    const dayName = getPullupDayName(
+    const name = getPullupDayName(
       pullupResult.dayNumber,
       pullupResult.day5ActualDay ?? undefined
     );
-    return `Подтягивания (${dayName}): ${pullupResult.totalReps} повт.`;
+    return `Подтягивания (${name}): ${pullupResult.totalReps} повт.`;
   }, [pullupResult]);
 
   return (
-    <div className="flex flex-col gap-4 px-4">
+    <div className="flex flex-col gap-4 px-4 pt-4">
       <h3 className="text-lg font-semibold text-white text-center">
         Итоги тренировки
       </h3>
@@ -231,19 +230,12 @@ export default function SummaryStep({ onFinish, onBack, isSaving, pullupResult }
         </div>
       </div>
 
-      {/* Action buttons */}
-      <div className="flex gap-3 mt-2 pb-2">
-        <button
-          onClick={onBack}
-          disabled={isSaving}
-          className="flex-1 py-3.5 rounded-xl bg-[#2A2A2A] text-[#B0B0B0] font-semibold text-base active:bg-[#333333] transition-colors disabled:opacity-40"
-        >
-          Назад
-        </button>
+      {/* Action button */}
+      <div className="mt-2 pb-2">
         <button
           onClick={handleFinish}
           disabled={isSaving}
-          className="flex-1 py-3.5 rounded-xl bg-[#4CAF50] text-white font-semibold text-base active:bg-[#388E3C] transition-colors disabled:opacity-40"
+          className="w-full py-3.5 rounded-xl bg-[#4CAF50] text-white font-semibold text-base active:bg-[#388E3C] transition-colors disabled:opacity-40"
         >
           {isSaving ? 'Сохранение...' : 'Завершить'}
         </button>

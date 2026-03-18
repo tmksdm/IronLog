@@ -296,7 +296,6 @@ export function ActiveWorkoutPage() {
           {activeTab === 'summary' && (
             <SummaryStep
               onFinish={handleFinalSave}
-              onBack={() => {}} // No "back" in tab mode — user switches tabs
               isSaving={isSaving}
               pullupResult={pullupResult}
             />

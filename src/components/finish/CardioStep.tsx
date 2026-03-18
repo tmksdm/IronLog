@@ -99,7 +99,7 @@ function JumpRopeInput({ onNext }: { onNext: () => void }) {
   const strokeDashoffset = circumference * (1 - progress);
 
   return (
-    <div className="flex flex-col items-center gap-5 px-4">
+    <div className="flex flex-col items-center gap-5 px-4 pt-4">
       <h3 className="text-lg font-semibold text-white">Скакалка</h3>
       <p className="text-sm text-[#B0B0B0] text-center">
         1 минута 15 секунд — посчитайте количество прыжков
@@ -280,7 +280,7 @@ function TreadmillInput({ onNext }: { onNext: () => void }) {
   };
 
   return (
-    <div className="flex flex-col items-center gap-5 px-4">
+    <div className="flex flex-col items-center gap-5 px-4 pt-4">
       <h3 className="text-lg font-semibold text-white">Бег 3 км</h3>
 
       {/* Run program plan */}

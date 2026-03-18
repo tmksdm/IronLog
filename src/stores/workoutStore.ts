@@ -141,13 +141,29 @@ function buildSnapshot(state: WorkoutState): WorkoutSnapshot | null {
   };
 }
 
+// Queue to prevent concurrent SQLite transactions
+let persistPromise: Promise<void> = Promise.resolve();
+let pendingSnapshot: { sessionId: string; snapshot: WorkoutSnapshot } | null = null;
+
 function persistState(state: WorkoutState): void {
   if (state._isRestoring) return;
   const snapshot = buildSnapshot(state);
   if (!snapshot) return;
-  workoutStateRepo
-    .saveWorkoutState(snapshot.session.id, snapshot)
-    .catch((err: unknown) => console.error('Failed to persist workout state:', err));
+
+  // Always overwrite pending — only the latest state matters
+  pendingSnapshot = { sessionId: snapshot.session.id, snapshot };
+
+  // Chain onto the existing promise so writes are sequential
+  persistPromise = persistPromise.then(async () => {
+    const current = pendingSnapshot;
+    if (!current) return;
+    pendingSnapshot = null; // Claim it
+    try {
+      await workoutStateRepo.saveWorkoutState(current.sessionId, current.snapshot);
+    } catch (err) {
+      console.error('Failed to persist workout state:', err);
+    }
+  });
 }
 
 /**

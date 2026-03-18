@@ -5,7 +5,7 @@
  * Update this file with each release.
  */
 
-export const APP_VERSION = '0.16.0-wip';
+export const APP_VERSION = '0.16.0';
 
 export interface ChangelogEntry {
   version: string;
@@ -16,20 +16,16 @@ export interface ChangelogEntry {
 export const CHANGELOG: ChangelogEntry[] = [
 
   {
-    version: '0.16.0-wip',
+    version: '0.16.0',
     date: '2026-03-18',
     changes: [
-      'Add PostWorkoutTabs component (Exercises | Cardio | Pullups | Summary)',
-      'Add ExercisesReview component (read-only exercise cards)',
-      'ActiveWorkoutPage: two modes (active workout / post-finish tabs)',
-      'WorkoutHeader: postFinish prop hides action buttons',
-      'workoutStore: add postFinish, activeTab, pullupInProgress state',
-      'Types: add PostWorkoutTab, PullupInProgressState, update WorkoutSnapshot',
-      'Snapshot persistence includes post-finish state for crash resilience',                  
-      'WIP: PullupStep still uses local state — switching tabs resets pullup',  
-      'progress. Next step: move pullup execution state into workoutStore.',
+      'Пост-тренировочный режим на вкладках вместо модального окна (Упражнения | Кардио | Подтягивания | Итоги)',
+      'Прогресс подтягиваний сохраняется при переключении вкладок и сворачивании приложения',
+      'Таймер отдыха между подходами подтягиваний работает при переключении вкладок',
+      'Обзор выполненных упражнений на вкладке «Упражнения» после завершения',
+      'Удалено старое модальное окно завершения тренировки',
     ],
-  }, 
+  },
 
   {
     version: '0.15.0',
@@ -37,7 +33,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     changes: [
       'Исправлено: прогрессия бега и подтягиваний больше не применяется преждевременно — только после финального сохранения тренировки',
     ],
-  }, 
+  },
 
   {
     version: '0.14.1',
@@ -48,7 +44,7 @@ export const CHANGELOG: ChangelogEntry[] = [
       'Заблокировано случайное закрытие модалки по тапу на фон',
       'Добавлена кнопка «Назад к кардио» на шаге подтягиваний',
     ],
-  },  
+  },
 
   {
     version: '0.14.0',
@@ -57,8 +53,8 @@ export const CHANGELOG: ChangelogEntry[] = [
       'Синхронизация подтягиваний с облаком (Supabase)',
       'Защита от сбоев: результат подтягиваний сохраняется в снапшот тренировки',
     ],
-  },  
-  
+  },
+
   {
     version: '0.13.1',
     date: '2026-03-16',
@@ -77,8 +73,8 @@ export const CHANGELOG: ChangelogEntry[] = [
       'Автоматическая прогрессия/регрессия целевых повторений',
       'Отображение результатов подтягиваний в итогах и деталях тренировки',
     ],
-  },  
-  
+  },
+
   {
     version: '0.12.0',
     date: '2026-03-12',
@@ -98,15 +94,15 @@ export const CHANGELOG: ChangelogEntry[] = [
     ],
   },
 
-    {
+  {
     version: '0.11.3',
     date: '2026-03-11',
     changes: [
       'Автоматическая проверка обновлений — баннер с кнопкой «Обновить» при наличии новой версии',
     ],
   },
-    
-    {
+
+  {
     version: '0.11.2',
     date: '2026-03-11',
     changes: [
@@ -114,8 +110,9 @@ export const CHANGELOG: ChangelogEntry[] = [
       'Убраны кнопки +/- из модальных окон ввода веса, кардио — теперь только ввод с клавиатуры',
       'Главный экран обновляется после удаления тренировки (одиночного и пакетного)',
     ],
-  },  
-    {
+  },
+
+  {
     version: '0.11.1',
     date: '2026-03-10',
     changes: [
@@ -123,7 +120,8 @@ export const CHANGELOG: ChangelogEntry[] = [
       'Показывает фактическую стоимость на основе реальной истории тренировок',
     ],
   },
-    {
+
+  {
     version: '0.11.0',
     date: '2026-03-10',
     changes: [
@@ -135,7 +133,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     ],
   },
 
-    {
+  {
     version: '0.10.1',
     date: '2026-03-10',
     changes: [
@@ -143,7 +141,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     ],
   },
 
-    {
+  {
     version: '0.10.0',
     date: '2026-03-09',
     changes: [

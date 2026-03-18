@@ -1,16 +1,17 @@
 // src/components/finish/PullupStep.tsx
 
 /**
- * Pull-up step in FinishWorkoutModal.
- * Shown between Cardio and Summary steps.
- * Handles all 5 pull-up day types with interactive set tracking and rest timers.
+ * Pull-up step in post-workout tabs.
+ * All execution state is stored in workoutStore.pullupInProgress
+ * so that switching tabs or app crash doesn't lose progress.
  *
  * NOTE: Pull-up program progression is NOT applied here.
- * It is deferred to FinishWorkoutModal.handleFinish() so that
+ * It is deferred to ActiveWorkoutPage.handleFinalSave() so that
  * deleting a test workout doesn't leave stale progression in localStorage.
  */
 
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { useEffect, useCallback, useRef, useState } from 'react';
+import { useWorkoutStore } from '../../stores/workoutStore';
 import {
   loadPullupProgram,
   buildDayPlan,
@@ -18,40 +19,72 @@ import {
   getLadderRestTime,
   getGripName,
   getPullupDayName,
-  type PullupProgramState,
-  type PullupDayPlan,
-  type PullupSetResult,
   type GripType,
 } from '../../utils/pullupProgram';
-import type { PullupStepResult } from '../../types';
+import type { PullupStepResult, PullupInProgressState } from '../../types';
 import { Check, SkipForward, ChevronRight } from 'lucide-react';
 
 interface PullupStepProps {
-  /** Called when pull-ups are done (completed or skipped). Passes result to parent. */
   onNext: (result: PullupStepResult) => void;
-  /** Called to go back to the previous step (cardio). Only works before starting. */
-  onBack?: () => void;
+}
+
+// Fallback grip list for safety
+const DAY3_GRIPS_DEFAULT: GripType[] = [
+  'normal', 'normal', 'normal',
+  'reverse', 'reverse', 'reverse',
+  'wide', 'wide', 'wide',
+];
+
+// ---- Helper ----
+
+function buildInitialState(plan: ReturnType<typeof buildDayPlan>): PullupInProgressState {
+  return {
+    plan: {
+      dayNumber: plan.dayNumber,
+      effectiveDay: plan.effectiveDay,
+      day5ActualDay: plan.day5ActualDay,
+      targetReps: plan.targetReps,
+      grips: plan.grips,
+      plannedSets: plan.plannedSets,
+      restSeconds: plan.restSeconds,
+    },
+    started: false,
+    completedSets: [],
+    currentSetIndex: 0,
+    ladderFailed: false,
+    ladderFinalSet: false,
+    isResting: false,
+    restSecondsLeft: 0,
+    restSecondsTotal: 0,
+  };
 }
 
 // ---- Rest Timer Component ----
+// Uses its OWN local state for the countdown to avoid hammering the store every second.
+// Only writes to store on finish (rest complete).
 
 function RestTimer({
-  seconds,
+  initialSeconds,
+  totalSeconds,
   onFinish,
 }: {
-  seconds: number;
+  initialSeconds: number;
+  totalSeconds: number;
   onFinish: () => void;
 }) {
-  const [left, setLeft] = useState(seconds);
+  const [left, setLeft] = useState(initialSeconds);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const onFinishRef = useRef(onFinish);
+  onFinishRef.current = onFinish;
 
+  // Start interval on mount
   useEffect(() => {
-    setLeft(seconds);
     intervalRef.current = setInterval(() => {
       setLeft((prev) => {
         if (prev <= 1) {
           if (intervalRef.current) clearInterval(intervalRef.current);
-          onFinish();
+          // Use setTimeout to avoid calling setState during render
+          setTimeout(() => onFinishRef.current(), 0);
           return 0;
         }
         return prev - 1;
@@ -61,7 +94,12 @@ function RestTimer({
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
-  }, [seconds, onFinish]);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleSkip = useCallback(() => {
+    if (intervalRef.current) clearInterval(intervalRef.current);
+    onFinishRef.current();
+  }, []);
 
   const min = Math.floor(left / 60);
   const sec = left % 60;
@@ -71,7 +109,7 @@ function RestTimer({
   const STROKE = 10;
   const radius = (SIZE - STROKE) / 2;
   const circumference = 2 * Math.PI * radius;
-  const progress = left / seconds;
+  const progress = totalSeconds > 0 ? left / totalSeconds : 0;
   const offset = circumference * (1 - progress);
 
   return (
@@ -105,7 +143,7 @@ function RestTimer({
         </span>
       </div>
       <button
-        onClick={onFinish}
+        onClick={handleSkip}
         className="px-6 py-2.5 rounded-xl bg-[#2A2A2A] text-[#B0B0B0] text-sm font-semibold active:bg-[#333333] transition-colors"
       >
         Пропустить отдых
@@ -117,48 +155,67 @@ function RestTimer({
 // ---- Day 1: Max Reps ----
 
 function Day1Max({
-  plan,
+  stateRef,
+  onUpdate,
   onComplete,
 }: {
-  plan: PullupDayPlan;
-  onComplete: (sets: PullupSetResult[]) => void;
+  stateRef: React.MutableRefObject<PullupInProgressState>;
+  onUpdate: (updates: Partial<PullupInProgressState>) => void;
+  onComplete: (sets: PullupInProgressState['completedSets']) => void;
 }) {
-  const TOTAL_SETS = plan.plannedSets ?? 5;
-  const [sets, setSets] = useState<PullupSetResult[]>([]);
-  const [currentSet, setCurrentSet] = useState(1);
-  const [reps, setReps] = useState('');
-  const [resting, setResting] = useState(false);
+  const state = stateRef.current;
+  const TOTAL_SETS = state.plan.plannedSets ?? 5;
+  const sets = state.completedSets;
+  const currentSet = sets.length + 1;
 
-  const handleConfirm = () => {
-    const val = parseInt(reps, 10);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const handleConfirm = useCallback(() => {
+    const val = parseInt(inputRef.current?.value ?? '', 10);
     if (isNaN(val) || val < 0) return;
 
-    const result: PullupSetResult = {
-      setNumber: currentSet,
+    const s = stateRef.current;
+    const result = {
+      setNumber: s.completedSets.length + 1,
       reps: val,
-      grip: null,
-      targetReps: null,
-      succeeded: true, // max effort — always "succeeded"
+      grip: null as 'normal' | 'reverse' | 'wide' | null,
+      targetReps: null as number | null,
+      succeeded: true,
     };
 
-    const newSets = [...sets, result];
-    setSets(newSets);
-    setReps('');
+    const newSets = [...s.completedSets, result];
 
-    if (currentSet >= TOTAL_SETS) {
+    if (newSets.length >= (s.plan.plannedSets ?? 5)) {
       onComplete(newSets);
     } else {
-      setResting(true);
+      const restSec = s.plan.restSeconds ?? 90;
+      onUpdate({
+        completedSets: newSets,
+        isResting: true,
+        restSecondsLeft: restSec,
+        restSecondsTotal: restSec,
+      });
     }
-  };
+
+    if (inputRef.current) inputRef.current.value = '';
+  }, [stateRef, onUpdate, onComplete]);
 
   const handleRestFinish = useCallback(() => {
-    setResting(false);
-    setCurrentSet((prev) => prev + 1);
-  }, []);
+    onUpdate({
+      isResting: false,
+      restSecondsLeft: 0,
+      restSecondsTotal: 0,
+    });
+  }, [onUpdate]);
 
-  if (resting) {
-    return <RestTimer seconds={plan.restSeconds ?? 90} onFinish={handleRestFinish} />;
+  if (state.isResting && state.restSecondsLeft > 0) {
+    return (
+      <RestTimer
+        initialSeconds={state.restSecondsLeft}
+        totalSeconds={state.restSecondsTotal}
+        onFinish={handleRestFinish}
+      />
+    );
   }
 
   return (
@@ -186,12 +243,11 @@ function Day1Max({
       </p>
       <p className="text-sm text-[#B0B0B0]">Подтянитесь на максимум</p>
 
-      {/* Reps input */}
       <input
+        ref={inputRef}
         type="number"
         inputMode="numeric"
-        value={reps}
-        onChange={(e) => setReps(e.target.value)}
+        defaultValue=""
         onFocus={(e) => e.target.select()}
         placeholder="0"
         className="w-28 h-14 text-center text-2xl font-bold text-white bg-[#1E1E1E] border border-[#333333] rounded-xl outline-none focus:border-[#FF9800] placeholder:text-[#555555]"
@@ -199,8 +255,7 @@ function Day1Max({
 
       <button
         onClick={handleConfirm}
-        disabled={!reps.trim()}
-        className="w-full py-3.5 rounded-xl bg-[#4CAF50] text-white font-semibold text-base active:bg-[#388E3C] transition-colors disabled:opacity-40"
+        className="w-full py-3.5 rounded-xl bg-[#4CAF50] text-white font-semibold text-base active:bg-[#388E3C] transition-colors"
       >
         <span className="flex items-center justify-center gap-2">
           <Check size={20} />
@@ -214,105 +269,131 @@ function Day1Max({
 // ---- Day 2: Ladder ----
 
 function Day2Ladder({
+  stateRef,
+  onUpdate,
   onComplete,
 }: {
-  plan: PullupDayPlan;
-  onComplete: (sets: PullupSetResult[]) => void;
+  stateRef: React.MutableRefObject<PullupInProgressState>;
+  onUpdate: (updates: Partial<PullupInProgressState>) => void;
+  onComplete: (sets: PullupInProgressState['completedSets']) => void;
 }) {
-  const [sets, setSets] = useState<PullupSetResult[]>([]);
-  const [currentStep, setCurrentStep] = useState(1);
-  const [failed, setFailed] = useState(false);
-  const [finalSet, setFinalSet] = useState(false);
-  const [reps, setReps] = useState('');
-  const [resting, setResting] = useState(false);
-  const [restTime, setRestTime] = useState(0);
+  const state = stateRef.current;
+  const sets = state.completedSets;
+  const currentStep = state.currentSetIndex || 1;
+  const failed = state.ladderFailed;
+  const finalSet = state.ladderFinalSet;
 
-  // After a successful step, rest = step × 10s, then move to next
-  const handleStepSuccess = () => {
-    const result: PullupSetResult = {
-      setNumber: sets.length + 1,
-      reps: currentStep,
-      grip: null,
-      targetReps: currentStep,
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const handleStepSuccess = useCallback(() => {
+    const s = stateRef.current;
+    const step = s.currentSetIndex || 1;
+    const result = {
+      setNumber: s.completedSets.length + 1,
+      reps: step,
+      grip: null as 'normal' | 'reverse' | 'wide' | null,
+      targetReps: step,
       succeeded: true,
     };
 
-    const newSets = [...sets, result];
-    setSets(newSets);
-    setRestTime(getLadderRestTime(currentStep));
-    setResting(true);
-  };
+    const newSets = [...s.completedSets, result];
+    const restSec = getLadderRestTime(step);
+    onUpdate({
+      completedSets: newSets,
+      isResting: true,
+      restSecondsLeft: restSec,
+      restSecondsTotal: restSec,
+    });
+  }, [stateRef, onUpdate]);
 
-  // Step failed — user enters actual reps
-  const handleStepFail = () => {
-    setFailed(true);
-    setReps('');
-  };
+  const handleStepFail = useCallback(() => {
+    onUpdate({ ladderFailed: true });
+    if (inputRef.current) inputRef.current.value = '';
+  }, [onUpdate]);
 
-  // Confirm failure reps
-  const handleFailConfirm = () => {
-    const val = parseInt(reps, 10);
+  const handleFailConfirm = useCallback(() => {
+    const val = parseInt(inputRef.current?.value ?? '', 10);
     if (isNaN(val) || val < 0) return;
 
-    const result: PullupSetResult = {
-      setNumber: sets.length + 1,
+    const s = stateRef.current;
+    const step = s.currentSetIndex || 1;
+    const result = {
+      setNumber: s.completedSets.length + 1,
       reps: val,
-      grip: null,
-      targetReps: currentStep,
+      grip: null as 'normal' | 'reverse' | 'wide' | null,
+      targetReps: step,
       succeeded: false,
     };
 
-    const newSets = [...sets, result];
-    setSets(newSets);
+    const newSets = [...s.completedSets, result];
+    const restSec = getLadderRestTime(val);
+    onUpdate({
+      completedSets: newSets,
+      ladderFinalSet: true,
+      isResting: true,
+      restSecondsLeft: restSec,
+      restSecondsTotal: restSec,
+    });
 
-    // Rest = actual reps × 10s, then final max set
-    setRestTime(getLadderRestTime(val));
-    setFinalSet(true);
-    setResting(true);
-  };
+    if (inputRef.current) inputRef.current.value = '';
+  }, [stateRef, onUpdate]);
 
-  // Final max-effort set
-  const handleFinalConfirm = () => {
-    const val = parseInt(reps, 10);
+  const handleFinalConfirm = useCallback(() => {
+    const val = parseInt(inputRef.current?.value ?? '', 10);
     if (isNaN(val) || val < 0) return;
 
-    const result: PullupSetResult = {
-      setNumber: sets.length + 1,
+    const s = stateRef.current;
+    const result = {
+      setNumber: s.completedSets.length + 1,
       reps: val,
-      grip: null,
-      targetReps: null,
+      grip: null as 'normal' | 'reverse' | 'wide' | null,
+      targetReps: null as number | null,
       succeeded: true,
     };
 
-    onComplete([...sets, result]);
-  };
+    onComplete([...s.completedSets, result]);
+  }, [stateRef, onComplete]);
 
   const handleRestFinish = useCallback(() => {
-    setResting(false);
-    if (finalSet) {
-      // Ready for final max set
-      setReps('');
+    const s = stateRef.current;
+    if (s.ladderFinalSet) {
+      onUpdate({
+        isResting: false,
+        restSecondsLeft: 0,
+        restSecondsTotal: 0,
+      });
     } else {
-      setCurrentStep((prev) => prev + 1);
+      onUpdate({
+        isResting: false,
+        restSecondsLeft: 0,
+        restSecondsTotal: 0,
+        currentSetIndex: (s.currentSetIndex || 1) + 1,
+      });
     }
-  }, [finalSet]);
+  }, [stateRef, onUpdate]);
 
-  if (resting) {
-    return <RestTimer seconds={restTime} onFinish={handleRestFinish} />;
+  if (state.isResting && state.restSecondsLeft > 0) {
+    return (
+      <RestTimer
+        initialSeconds={state.restSecondsLeft}
+        totalSeconds={state.restSecondsTotal}
+        onFinish={handleRestFinish}
+      />
+    );
   }
 
-  // Final max set
-  if (finalSet && !resting) {
+  // Final max set (after rest)
+  if (finalSet && !state.isResting) {
     return (
       <div className="flex flex-col items-center gap-4">
         <p className="text-base text-[#FF9800] font-semibold">Финальный подход</p>
         <p className="text-sm text-[#B0B0B0]">Подтянитесь на максимум</p>
 
         <input
+          ref={inputRef}
           type="number"
           inputMode="numeric"
-          value={reps}
-          onChange={(e) => setReps(e.target.value)}
+          defaultValue=""
           onFocus={(e) => e.target.select()}
           placeholder="0"
           className="w-28 h-14 text-center text-2xl font-bold text-white bg-[#1E1E1E] border border-[#333333] rounded-xl outline-none focus:border-[#FF9800] placeholder:text-[#555555]"
@@ -320,8 +401,7 @@ function Day2Ladder({
 
         <button
           onClick={handleFinalConfirm}
-          disabled={!reps.trim()}
-          className="w-full py-3.5 rounded-xl bg-[#4CAF50] text-white font-semibold text-base active:bg-[#388E3C] transition-colors disabled:opacity-40"
+          className="w-full py-3.5 rounded-xl bg-[#4CAF50] text-white font-semibold text-base active:bg-[#388E3C] transition-colors"
         >
           <span className="flex items-center justify-center gap-2">
             <Check size={20} />
@@ -342,10 +422,10 @@ function Day2Ladder({
         <p className="text-sm text-[#B0B0B0]">Сколько получилось?</p>
 
         <input
+          ref={inputRef}
           type="number"
           inputMode="numeric"
-          value={reps}
-          onChange={(e) => setReps(e.target.value)}
+          defaultValue=""
           onFocus={(e) => e.target.select()}
           placeholder="0"
           className="w-28 h-14 text-center text-2xl font-bold text-white bg-[#1E1E1E] border border-[#333333] rounded-xl outline-none focus:border-[#F44336] placeholder:text-[#555555]"
@@ -353,8 +433,7 @@ function Day2Ladder({
 
         <button
           onClick={handleFailConfirm}
-          disabled={!reps.trim()}
-          className="w-full py-3.5 rounded-xl bg-[#F44336] text-white font-semibold text-base active:bg-[#D32F2F] transition-colors disabled:opacity-40"
+          className="w-full py-3.5 rounded-xl bg-[#F44336] text-white font-semibold text-base active:bg-[#D32F2F] transition-colors"
         >
           Записать и перейти к финальному подходу
         </button>
@@ -365,7 +444,6 @@ function Day2Ladder({
   // Normal ladder step
   return (
     <div className="flex flex-col items-center gap-4">
-      {/* Previous steps history */}
       {sets.length > 0 && (
         <div className="flex flex-wrap gap-2 justify-center">
           {sets.map((s, i) => (
@@ -411,70 +489,104 @@ function Day2Ladder({
 // ---- Day 3/4: Grip Sets ----
 
 function Day34Grips({
-  plan,
+  stateRef,
+  onUpdate,
   onComplete,
 }: {
-  plan: PullupDayPlan;
-  onComplete: (sets: PullupSetResult[]) => void;
+  stateRef: React.MutableRefObject<PullupInProgressState>;
+  onUpdate: (updates: Partial<PullupInProgressState>) => void;
+  onComplete: (sets: PullupInProgressState['completedSets']) => void;
 }) {
-  const totalSets = plan.plannedSets ?? 9;
-  const grips = plan.grips ?? DAY3_GRIPS_DEFAULT;
-  const target = plan.targetReps ?? 4;
+  const state = stateRef.current;
+  const totalSets = state.plan.plannedSets ?? 9;
+  const grips = state.plan.grips ?? DAY3_GRIPS_DEFAULT;
+  const target = state.plan.targetReps ?? 4;
 
-  const [sets, setSets] = useState<PullupSetResult[]>([]);
-  const [currentSet, setCurrentSet] = useState(0); // 0-based index
-  const [resting, setResting] = useState(false);
-
+  const sets = state.completedSets;
+  const currentSet = state.currentSetIndex;
   const currentGrip = grips[currentSet] ?? 'normal';
 
-  const handleSuccess = () => {
-    const result: PullupSetResult = {
-      setNumber: currentSet + 1,
-      reps: target,
-      grip: currentGrip,
-      targetReps: target,
+  const handleSuccess = useCallback(() => {
+    const s = stateRef.current;
+    const idx = s.currentSetIndex;
+    const g = (s.plan.grips ?? DAY3_GRIPS_DEFAULT)[idx] ?? 'normal';
+    const t = s.plan.targetReps ?? 4;
+    const total = s.plan.plannedSets ?? 9;
+
+    const result = {
+      setNumber: idx + 1,
+      reps: t,
+      grip: g,
+      targetReps: t,
       succeeded: true,
     };
 
-    const newSets = [...sets, result];
-    setSets(newSets);
+    const newSets = [...s.completedSets, result];
 
-    if (currentSet + 1 >= totalSets) {
+    if (idx + 1 >= total) {
       onComplete(newSets);
     } else {
-      setResting(true);
+      const restSec = s.plan.restSeconds ?? 60;
+      onUpdate({
+        completedSets: newSets,
+        isResting: true,
+        restSecondsLeft: restSec,
+        restSecondsTotal: restSec,
+      });
     }
-  };
+  }, [stateRef, onUpdate, onComplete]);
 
-  const handleFail = () => {
-    const result: PullupSetResult = {
-      setNumber: currentSet + 1,
+  const handleFail = useCallback(() => {
+    const s = stateRef.current;
+    const idx = s.currentSetIndex;
+    const g = (s.plan.grips ?? DAY3_GRIPS_DEFAULT)[idx] ?? 'normal';
+    const t = s.plan.targetReps ?? 4;
+    const total = s.plan.plannedSets ?? 9;
+
+    const result = {
+      setNumber: idx + 1,
       reps: 0,
-      grip: currentGrip,
-      targetReps: target,
+      grip: g,
+      targetReps: t,
       succeeded: false,
     };
 
-    const newSets = [...sets, result];
-    setSets(newSets);
+    const newSets = [...s.completedSets, result];
 
-    if (currentSet + 1 >= totalSets) {
+    if (idx + 1 >= total) {
       onComplete(newSets);
     } else {
-      setResting(true);
+      const restSec = s.plan.restSeconds ?? 60;
+      onUpdate({
+        completedSets: newSets,
+        isResting: true,
+        restSecondsLeft: restSec,
+        restSecondsTotal: restSec,
+      });
     }
-  };
+  }, [stateRef, onUpdate, onComplete]);
 
   const handleRestFinish = useCallback(() => {
-    setResting(false);
-    setCurrentSet((prev) => prev + 1);
-  }, []);
+    const s = stateRef.current;
+    onUpdate({
+      isResting: false,
+      restSecondsLeft: 0,
+      restSecondsTotal: 0,
+      currentSetIndex: s.currentSetIndex + 1,
+    });
+  }, [stateRef, onUpdate]);
 
-  if (resting) {
-    return <RestTimer seconds={plan.restSeconds ?? 60} onFinish={handleRestFinish} />;
+  if (state.isResting && state.restSecondsLeft > 0) {
+    return (
+      <RestTimer
+        initialSeconds={state.restSecondsLeft}
+        totalSeconds={state.restSecondsTotal}
+        onFinish={handleRestFinish}
+      />
+    );
   }
 
-  // Group indicator — which grip block we're in
+  // Group indicator
   const gripBlockLabel = (() => {
     const gripBlock = Math.floor(currentSet / 3) + 1;
     const totalBlocks = Math.ceil(totalSets / 3);
@@ -489,7 +601,7 @@ function Day34Grips({
       <div className="flex flex-wrap gap-1.5 justify-center">
         {Array.from({ length: totalSets }, (_, i) => {
           const s = sets[i];
-          let color = 'bg-[#333333]'; // pending
+          let color = 'bg-[#333333]';
           if (s) {
             color = s.succeeded ? 'bg-[#4CAF50]' : 'bg-[#F44336]';
           } else if (i === currentSet) {
@@ -516,7 +628,6 @@ function Day34Grips({
         Засчитано: {completedCount} из {totalSets}
       </p>
 
-      {/* Current set */}
       <div className="w-24 h-24 rounded-full bg-[#2A2A2A] border-4 border-[#FF9800] flex flex-col items-center justify-center">
         <span className="text-3xl font-bold text-white">{target}</span>
         <span className="text-[10px] text-[#B0B0B0]">повт.</span>
@@ -547,77 +658,184 @@ function Day34Grips({
   );
 }
 
-// Fallback grip list for safety
-const DAY3_GRIPS_DEFAULT: GripType[] = [
-  'normal', 'normal', 'normal',
-  'reverse', 'reverse', 'reverse',
-  'wide', 'wide', 'wide',
-];
+// ---- Completed View ----
+
+function CompletedView({ result }: { result: PullupStepResult }) {
+  const dayName = getPullupDayName(
+    result.dayNumber,
+    result.day5ActualDay ?? undefined
+  );
+
+  if (result.skipped) {
+    return (
+      <div className="flex flex-col items-center gap-4 py-8 px-4">
+        <div className="w-16 h-16 rounded-full bg-[#2A2A2A] flex items-center justify-center">
+          <SkipForward size={32} className="text-[#707070]" />
+        </div>
+        <p className="text-base text-[#B0B0B0]">Подтягивания пропущены</p>
+        <p className="text-sm text-[#707070]">{dayName}</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col items-center gap-4 py-8 px-4">
+      <div className="w-16 h-16 rounded-full bg-[#4CAF50]/20 flex items-center justify-center">
+        <Check size={32} className="text-[#4CAF50]" />
+      </div>
+      <p className="text-lg font-semibold text-white">Подтягивания выполнены</p>
+      <p className="text-sm text-[#B0B0B0]">{dayName}</p>
+
+      <div className="grid grid-cols-2 gap-3 w-full max-w-xs">
+        <div className="bg-[#252525] rounded-xl p-3 flex flex-col items-center gap-1">
+          <span className="text-xs text-[#B0B0B0]">Подходов</span>
+          <span className="text-xl font-bold text-white">{result.sets.length}</span>
+        </div>
+        <div className="bg-[#252525] rounded-xl p-3 flex flex-col items-center gap-1">
+          <span className="text-xs text-[#B0B0B0]">Всего повт.</span>
+          <span className="text-xl font-bold text-[#FF9800]">{result.totalReps}</span>
+        </div>
+      </div>
+
+      {result.sets.length > 0 && (
+        <div className="w-full max-w-xs">
+          <div className="flex flex-wrap gap-2 justify-center">
+            {result.sets.map((s, i) => (
+              <div
+                key={i}
+                className={`w-10 h-10 rounded-full flex flex-col items-center justify-center text-xs font-bold ${
+                  s.succeeded ? 'bg-[#4CAF50] text-white' : 'bg-[#F44336] text-white'
+                }`}
+              >
+                <span>{s.reps}</span>
+                {s.grip && (
+                  <span className="text-[8px] opacity-70">
+                    {s.grip === 'normal' ? 'О' : s.grip === 'reverse' ? 'Р' : 'Ш'}
+                  </span>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 // ---- Main PullupStep Component ----
 
-export default function PullupStep({ onNext, onBack }: PullupStepProps) {
-  const [programState] = useState<PullupProgramState>(() => loadPullupProgram());
-  const plan = useMemo(() => buildDayPlan(programState), [programState]);
-  const [started, setStarted] = useState(false);
+export default function PullupStep({ onNext }: PullupStepProps) {
+  const pullupInProgress = useWorkoutStore((s) => s.pullupInProgress);
+  const pullupResult = useWorkoutStore((s) => s.pullupResult);
+  const setPullupInProgress = useWorkoutStore((s) => s.setPullupInProgress);
+  const updatePullupInProgress = useWorkoutStore((s) => s.updatePullupInProgress);
 
-  const handleComplete = (sets: PullupSetResult[]) => {
-    const totalReps = calculateTotalReps(sets);
+  // Keep a ref to the latest state so child callbacks don't need state as dependency
+  const stateRef = useRef<PullupInProgressState | null>(pullupInProgress);
+  stateRef.current = pullupInProgress;
+
+  // Force re-render when store updates (stateRef alone won't trigger render)
+  // pullupInProgress from useWorkoutStore already does this via Zustand subscription.
+
+  // Initialize pullupInProgress on first mount if not already set and no result
+  const initialized = useRef(false);
+  useEffect(() => {
+    if (initialized.current) return;
+    if (!pullupInProgress && !pullupResult) {
+      initialized.current = true;
+      const programState = loadPullupProgram();
+      const plan = buildDayPlan(programState);
+      setPullupInProgress(buildInitialState(plan));
+    }
+  }, [pullupInProgress, pullupResult, setPullupInProgress]);
+
+  // Stable callbacks that read from stateRef
+  const handleUpdate = useCallback(
+    (updates: Partial<PullupInProgressState>) => {
+      updatePullupInProgress(updates);
+    },
+    [updatePullupInProgress]
+  );
+
+  const handleComplete = useCallback(
+    (completedSets: PullupInProgressState['completedSets']) => {
+      const s = stateRef.current;
+      if (!s) return;
+
+      const totalReps = calculateTotalReps(completedSets);
+
+      const result: PullupStepResult = {
+        dayNumber: s.plan.dayNumber,
+        effectiveDay: s.plan.effectiveDay,
+        day5ActualDay: s.plan.day5ActualDay,
+        sets: completedSets,
+        totalReps,
+        skipped: false,
+      };
+
+      setPullupInProgress(null);
+      onNext(result);
+    },
+    [setPullupInProgress, onNext]
+  );
+
+  const handleSkip = useCallback(() => {
+    const s = stateRef.current;
+    if (!s) return;
 
     const result: PullupStepResult = {
-      dayNumber: plan.dayNumber,
-      effectiveDay: plan.effectiveDay,
-      day5ActualDay: plan.day5ActualDay,
-      sets,
-      totalReps,
-      skipped: false,
-    };
-
-    // Progression is applied later in FinishWorkoutModal.handleFinish()
-    onNext(result);
-  };
-
-  const handleSkip = () => {
-    const result: PullupStepResult = {
-      dayNumber: plan.dayNumber,
-      effectiveDay: plan.effectiveDay,
-      day5ActualDay: plan.day5ActualDay,
+      dayNumber: s.plan.dayNumber,
+      effectiveDay: s.plan.effectiveDay,
+      day5ActualDay: s.plan.day5ActualDay,
       sets: [],
       totalReps: 0,
       skipped: true,
     };
 
-    // Progression is applied later in FinishWorkoutModal.handleFinish()
+    setPullupInProgress(null);
     onNext(result);
-  };
+  }, [setPullupInProgress, onNext]);
+
+  const handleStart = useCallback(() => {
+    const s = stateRef.current;
+    if (!s) return;
+    updatePullupInProgress({
+      started: true,
+      currentSetIndex: s.plan.effectiveDay === 2 ? 1 : 0,
+    });
+  }, [updatePullupInProgress]);
+
+  // If already completed, show completed view
+  if (pullupResult) {
+    return <CompletedView result={pullupResult} />;
+  }
+
+  // Still loading / initializing
+  if (!pullupInProgress) {
+    return null;
+  }
 
   // Intro screen — show what day it is, let user start or skip
-  if (!started) {
+  if (!pullupInProgress.started) {
+    const programState = loadPullupProgram();
+    const fullPlan = buildDayPlan(programState);
+
     return (
-      <div className="flex flex-col items-center gap-5 px-4">
+      <div className="flex flex-col items-center gap-5 px-4 pt-4">
         <h3 className="text-lg font-semibold text-white">Подтягивания</h3>
 
         <div className="w-full bg-[#252525] rounded-xl p-4 flex flex-col gap-2">
           <div className="flex items-center justify-between">
             <span className="text-sm text-[#B0B0B0]">День</span>
             <span className="text-sm text-white font-semibold">
-              {plan.dayNumber} из 5
+              {fullPlan.dayNumber} из 5
             </span>
           </div>
           <p className="text-base text-[#FF9800] font-semibold">
-            {getPullupDayName(plan.dayNumber, plan.day5ActualDay ?? undefined)}
+            {getPullupDayName(fullPlan.dayNumber, fullPlan.day5ActualDay ?? undefined)}
           </p>
-          <p className="text-sm text-[#B0B0B0]">{plan.description}</p>
+          <p className="text-sm text-[#B0B0B0]">{fullPlan.description}</p>
         </div>
-
-        {onBack && (
-          <button
-            onClick={onBack}
-            className="w-full py-3 rounded-xl bg-[#2A2A2A] text-[#B0B0B0] font-semibold text-sm active:bg-[#333333] transition-colors mt-2"
-          >
-            ← Назад к кардио
-          </button>
-        )}
 
         <div className="flex gap-3 w-full mt-2">
           <button
@@ -630,7 +848,7 @@ export default function PullupStep({ onNext, onBack }: PullupStepProps) {
             </span>
           </button>
           <button
-            onClick={() => setStarted(true)}
+            onClick={handleStart}
             className="flex-1 py-3.5 rounded-xl bg-[#FF9800] text-white font-semibold text-base active:bg-[#E68900] transition-colors"
           >
             <span className="flex items-center justify-center gap-2">
@@ -639,26 +857,39 @@ export default function PullupStep({ onNext, onBack }: PullupStepProps) {
             </span>
           </button>
         </div>
-
       </div>
     );
   }
 
   // Active execution — render the right day component
+  const { plan } = pullupInProgress;
+
   return (
-    <div className="flex flex-col items-center gap-4 px-4">
+    <div className="flex flex-col items-center gap-4 px-4 pt-4">
       <h3 className="text-lg font-semibold text-white">
         {getPullupDayName(plan.dayNumber, plan.day5ActualDay ?? undefined)}
       </h3>
 
       {plan.effectiveDay === 1 && (
-        <Day1Max plan={plan} onComplete={handleComplete} />
+        <Day1Max
+          stateRef={stateRef as React.MutableRefObject<PullupInProgressState>}
+          onUpdate={handleUpdate}
+          onComplete={handleComplete}
+        />
       )}
       {plan.effectiveDay === 2 && (
-        <Day2Ladder plan={plan} onComplete={handleComplete} />
+        <Day2Ladder
+          stateRef={stateRef as React.MutableRefObject<PullupInProgressState>}
+          onUpdate={handleUpdate}
+          onComplete={handleComplete}
+        />
       )}
       {(plan.effectiveDay === 3 || plan.effectiveDay === 4) && (
-        <Day34Grips plan={plan} onComplete={handleComplete} />
+        <Day34Grips
+          stateRef={stateRef as React.MutableRefObject<PullupInProgressState>}
+          onUpdate={handleUpdate}
+          onComplete={handleComplete}
+        />
       )}
     </div>
   );
