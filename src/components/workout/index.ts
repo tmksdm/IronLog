@@ -6,3 +6,5 @@ export { ExerciseCard } from './ExerciseCard';
 export { SetRow } from './SetRow';
 export { RestTimer } from './RestTimer';
 export { ConfirmModal } from './ConfirmModal';
+export { PostWorkoutTabs } from './PostWorkoutTabs';
+export { ExercisesReview } from './ExercisesReview';

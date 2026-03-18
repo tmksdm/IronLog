@@ -3,6 +3,7 @@
 /**
  * Top header bar for active workout.
  * Shows day type, direction, elapsed time, and action buttons.
+ * In post-finish mode: no action buttons, just info.
  */
 
 import { useState, useEffect, useRef } from 'react';
@@ -16,6 +17,7 @@ interface WorkoutHeaderProps {
   exercisesTotal: number;
   onFinish: () => void;
   onCancel: () => void;
+  postFinish?: boolean;
 }
 
 const dayNames: Record<number, string> = { 1: 'Присед', 2: 'Тяга', 3: 'Жим' };
@@ -32,6 +34,7 @@ export function WorkoutHeader({
   exercisesTotal,
   onFinish,
   onCancel,
+  postFinish = false,
 }: WorkoutHeaderProps) {
   const accentColor = getDayTypeColor(session.dayTypeId);
   const [elapsed, setElapsed] = useState('0:00');
@@ -82,12 +85,14 @@ export function WorkoutHeader({
           </span>
         </div>
 
-        <button
-          className="p-2 rounded-full active:bg-white/10"
-          onClick={onCancel}
-        >
-          <X size={24} className="text-[#707070]" />
-        </button>
+        {!postFinish && (
+          <button
+            className="p-2 rounded-full active:bg-white/10"
+            onClick={onCancel}
+          >
+            <X size={24} className="text-[#707070]" />
+          </button>
+        )}
       </div>
 
       {/* Progress bar */}
@@ -106,14 +111,16 @@ export function WorkoutHeader({
           {exercisesDone}/{exercisesTotal}
         </span>
 
-        <button
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl
-                     bg-green-600 active:bg-green-700 text-white text-sm font-semibold shrink-0"
-          onClick={onFinish}
-        >
-          <Flag size={14} />
-          Завершить
-        </button>
+        {!postFinish && (
+          <button
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl
+                       bg-green-600 active:bg-green-700 text-white text-sm font-semibold shrink-0"
+            onClick={onFinish}
+          >
+            <Flag size={14} />
+            Завершить
+          </button>
+        )}
       </div>
     </div>
   );

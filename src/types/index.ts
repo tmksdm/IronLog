@@ -112,7 +112,11 @@ export interface WorkoutSnapshot {
   treadmillSucceeded: boolean | null;
   isCardioCompleted: boolean;
   restTimerDefault: number;
-  pullupResult: PullupStepResult | null;  
+  pullupResult: PullupStepResult | null;
+  /** v0.16: post-finish state */
+  postFinish?: boolean;
+  activeTab?: PostWorkoutTab;
+  pullupInProgress?: PullupInProgressState | null;
 }
 
 // --- Analytics types ---
@@ -267,4 +271,47 @@ export interface PullupStepResult {
   }>;
   totalReps: number;
   skipped: boolean;
+}
+
+// --- Post-workout tab types ---
+
+export type PostWorkoutTab = 'exercises' | 'cardio' | 'pullups' | 'summary';
+
+/** 
+ * In-progress pullup session state — persisted in snapshot 
+ * so that switching tabs or app crash doesn't lose progress.
+ */
+export interface PullupInProgressState {
+  /** The plan for this session (built from program state at start) */
+  plan: {
+    dayNumber: 1 | 2 | 3 | 4 | 5;
+    effectiveDay: 1 | 2 | 3 | 4;
+    day5ActualDay: 1 | 2 | 3 | 4 | null;
+    targetReps: number | null;
+    grips: Array<'normal' | 'reverse' | 'wide'> | null;
+    plannedSets: number | null;
+    restSeconds: number | null;
+  };
+  /** Whether user has pressed "Начать" (past the intro screen) */
+  started: boolean;
+  /** Completed sets so far */
+  completedSets: Array<{
+    setNumber: number;
+    reps: number;
+    grip: 'normal' | 'reverse' | 'wide' | null;
+    targetReps: number | null;
+    succeeded: boolean;
+  }>;
+  /** Current set index (0-based, for days 3/4) or ladder step (1-based, for day 2) */
+  currentSetIndex: number;
+  /** Day 2 specific: whether ladder has failed */
+  ladderFailed: boolean;
+  /** Day 2 specific: whether we're on the final max-effort set */
+  ladderFinalSet: boolean;
+  /** Whether resting between sets right now */
+  isResting: boolean;
+  /** Rest timer: seconds remaining (0 = not resting) */
+  restSecondsLeft: number;
+  /** Rest timer: total seconds for current rest (for progress ring) */
+  restSecondsTotal: number;
 }

@@ -2,8 +2,12 @@
 
 /**
  * Full active workout page.
- * Vertical scrollable list of exercise cards with navigation grid,
- * header with timer, rest timer overlay, finish modal, and cancel actions.
+ * Two modes:
+ * 1. Active workout — exercise cards, nav grid, header, rest timer
+ * 2. Post-finish — tab-based flow (Exercises review | Cardio | Pullups | Summary)
+ *
+ * After pressing "Завершить" and confirming, switches to post-finish mode.
+ * Rest timer works globally across all tabs.
  */
 
 import { useState, useCallback, useRef, useEffect } from 'react';
@@ -16,8 +20,16 @@ import {
   ExerciseCard,
   RestTimer,
   ConfirmModal,
+  PostWorkoutTabs,
+  ExercisesReview,
 } from '../components/workout';
-import { FinishWorkoutModal } from '../components/finish';
+import CardioStep from '../components/finish/CardioStep';
+import PullupStep from '../components/finish/PullupStep';
+import SummaryStep from '../components/finish/SummaryStep';
+import type { PullupStepResult } from '../types';
+import { pullupRepo } from '../db';
+import { applyRunResult } from '../utils/runningProgram';
+import { applyAndSaveDayResult } from '../utils/pullupProgram';
 
 export function ActiveWorkoutPage() {
   const navigate = useNavigate();
@@ -35,6 +47,16 @@ export function ActiveWorkoutPage() {
   const cancelWorkout = useWorkoutStore((s) => s.cancelWorkout);
   const startRestTimer = useWorkoutStore((s) => s.startRestTimer);
   const recordEndTime = useWorkoutStore((s) => s.recordEndTime);
+  const postFinish = useWorkoutStore((s) => s.postFinish);
+  const enterPostFinish = useWorkoutStore((s) => s.enterPostFinish);
+  const activeTab = useWorkoutStore((s) => s.activeTab);
+  const finishWorkout = useWorkoutStore((s) => s.finishWorkout);
+  const isCardioCompleted = useWorkoutStore((s) => s.isCardioCompleted);
+  const treadmillSucceeded = useWorkoutStore((s) => s.treadmillSucceeded);
+  const cardioType = useWorkoutStore((s) => s.cardioType);
+  const pullupResult = useWorkoutStore((s) => s.pullupResult);
+  const savedPullupResult = useWorkoutStore((s) => s.pullupResult);
+  const savePullupResultToStore = useWorkoutStore((s) => s.savePullupResult);
 
   const refreshNextDayInfo = useAppStore((s) => s.refreshNextDayInfo);
 
@@ -43,7 +65,7 @@ export function ActiveWorkoutPage() {
   const [showCancelFinal, setShowCancelFinal] = useState(false);
   const [showSkipConfirm, setShowSkipConfirm] = useState<number | null>(null);
   const [showFinishConfirm, setShowFinishConfirm] = useState(false);
-  const [isFinishModalOpen, setIsFinishModalOpen] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
   // Refs for scrolling
   const exerciseRefs = useRef<Map<number, HTMLDivElement>>(new Map());
@@ -56,7 +78,7 @@ export function ActiveWorkoutPage() {
     }
   }, [isActive, session, navigate]);
 
-  // ---- Handlers ----
+  // ---- Active workout handlers ----
 
   const handleCompleteSet = useCallback(
     (exerciseIndex: number, setIndex: number, actualReps?: number) => {
@@ -117,14 +139,9 @@ export function ActiveWorkoutPage() {
 
   const handleFinishConfirm = useCallback(() => {
     setShowFinishConfirm(false);
-    recordEndTime(); // Record end time only after confirmation
-    setIsFinishModalOpen(true);
-  }, [recordEndTime]);
-
-
-  const handleFinishModalClose = useCallback(() => {
-    setIsFinishModalOpen(false);
-  }, []);
+    recordEndTime();
+    enterPostFinish();
+  }, [recordEndTime, enterPostFinish]);
 
   const handleCancelPress = useCallback(() => {
     setShowCancelConfirm(true);
@@ -141,6 +158,85 @@ export function ActiveWorkoutPage() {
     await refreshNextDayInfo();
     navigate('/', { replace: true });
   }, [cancelWorkout, refreshNextDayInfo, navigate]);
+
+  // ---- Post-finish handlers ----
+
+  // CardioStep calls onNext when done (saved or skipped)
+  const handleCardioNext = useCallback(() => {
+    // No-op: data is already in store. User can freely switch tabs.
+  }, []);
+
+  // PullupStep calls onNext with result when completed
+  const handlePullupNext = useCallback(
+    (result: PullupStepResult) => {
+      savePullupResultToStore(result);
+    },
+    [savePullupResultToStore]
+  );
+
+  // SummaryStep "Завершить" — save everything to DB
+  const handleFinalSave = useCallback(
+    async (weightAfter: number | null) => {
+      setIsSaving(true);
+      try {
+        const finishedSession = await finishWorkout(weightAfter);
+
+        if (finishedSession) {
+          // Save pull-up logs to DB
+          const resultToSave = pullupResult ?? savedPullupResult;
+          if (resultToSave) {
+            await pullupRepo.savePullupSession({
+              workoutSessionId: finishedSession.id,
+              pullupDay: resultToSave.dayNumber,
+              effectiveDay: resultToSave.effectiveDay,
+              sets: resultToSave.sets,
+              totalReps: resultToSave.totalReps,
+              skipped: resultToSave.skipped,
+            });
+          }
+
+          // --- Apply program progressions AFTER successful save ---
+
+          // Running program
+          if (
+            isCardioCompleted &&
+            cardioType === 'treadmill_3km' &&
+            treadmillSucceeded !== null
+          ) {
+            applyRunResult(treadmillSucceeded);
+          }
+
+          // Pull-up program
+          if (resultToSave) {
+            applyAndSaveDayResult({
+              dayNumber: resultToSave.dayNumber,
+              day5ActualDay: resultToSave.day5ActualDay,
+              sets: resultToSave.sets,
+              totalReps: resultToSave.totalReps,
+              skipped: resultToSave.skipped,
+            });
+          }
+
+          await refreshNextDayInfo();
+          navigate(`/summary/${finishedSession.id}`, { replace: true });
+        }
+      } catch (error) {
+        console.error('Failed to finish workout:', error);
+      } finally {
+        setIsSaving(false);
+      }
+    },
+    [
+      finishWorkout,
+      pullupResult,
+      savedPullupResult,
+      isCardioCompleted,
+      cardioType,
+      treadmillSucceeded,
+      refreshNextDayInfo,
+      navigate,
+    ]
+  );
 
   // ---- Scroll helpers ----
 
@@ -171,6 +267,51 @@ export function ActiveWorkoutPage() {
   ).length;
   const exercisesTotal = exercises.length;
 
+  // =======================================
+  // POST-FINISH MODE
+  // =======================================
+  if (postFinish) {
+    return (
+      <div className="flex flex-col h-screen bg-[#121212]">
+        {/* Header — same as active workout, but finish button hidden */}
+        <WorkoutHeader
+          session={session}
+          exercisesDone={exercisesDone}
+          exercisesTotal={exercisesTotal}
+          onFinish={() => {}} // No-op in post-finish
+          onCancel={() => {}} // No-op in post-finish
+          postFinish
+        />
+
+        {/* Tab bar */}
+        <PostWorkoutTabs />
+
+        {/* Tab content */}
+        <div ref={scrollContainerRef} className="flex-1 overflow-y-auto pb-8">
+          {activeTab === 'exercises' && <ExercisesReview />}
+          {activeTab === 'cardio' && <CardioStep onNext={handleCardioNext} />}
+          {activeTab === 'pullups' && (
+            <PullupStep onNext={handlePullupNext} />
+          )}
+          {activeTab === 'summary' && (
+            <SummaryStep
+              onFinish={handleFinalSave}
+              onBack={() => {}} // No "back" in tab mode — user switches tabs
+              isSaving={isSaving}
+              pullupResult={pullupResult}
+            />
+          )}
+        </div>
+
+        {/* Rest timer — works globally across all tabs */}
+        <RestTimer />
+      </div>
+    );
+  }
+
+  // =======================================
+  // ACTIVE WORKOUT MODE
+  // =======================================
   return (
     <div className="flex flex-col h-screen bg-[#121212]">
       {/* Fixed header */}
@@ -217,17 +358,11 @@ export function ActiveWorkoutPage() {
       {/* Rest timer overlay / bubble */}
       <RestTimer />
 
-      {/* Finish workout modal */}
-      <FinishWorkoutModal
-        isOpen={isFinishModalOpen}
-        onClose={handleFinishModalClose}
-      />
-
       {/* Cancel confirmation — step 1 */}
       <ConfirmModal
         isOpen={showCancelConfirm}
         title="Отменить тренировку?"
-        message="Все записанные подходы будут удалены."
+        message="Все данные этой тренировки будут потеряны."
         confirmText="Да, отменить"
         cancelText="Нет, продолжить"
         onConfirm={handleCancelFirst}
@@ -238,9 +373,9 @@ export function ActiveWorkoutPage() {
       <ConfirmModal
         isOpen={showCancelFinal}
         title="Точно отменить?"
-        message="Последний шанс — тренировка будет удалена безвозвратно."
+        message="Это действие необратимо. Тренировка будет удалена."
         confirmText="Удалить"
-        cancelText="Нет"
+        cancelText="Вернуться"
         onConfirm={handleCancelFinal}
         onCancel={() => setShowCancelFinal(false)}
       />
@@ -249,19 +384,18 @@ export function ActiveWorkoutPage() {
       <ConfirmModal
         isOpen={showFinishConfirm}
         title="Завершить тренировку?"
-        message="Время тренировки будет зафиксировано."
+        message="Таймер будет остановлен."
         confirmText="Завершить"
         cancelText="Отмена"
         onConfirm={handleFinishConfirm}
         onCancel={() => setShowFinishConfirm(false)}
       />
 
-
       {/* Skip confirmation */}
       <ConfirmModal
         isOpen={showSkipConfirm !== null}
         title="Пропустить упражнение?"
-        message="Можно вернуть в работу в любой момент."
+        message="Оно станет приоритетным в следующую тренировку."
         confirmText="Пропустить"
         cancelText="Отмена"
         onConfirm={handleSkipConfirm}

@@ -5,7 +5,7 @@
  * Update this file with each release.
  */
 
-export const APP_VERSION = '0.15.0';
+export const APP_VERSION = '0.16.0-wip';
 
 export interface ChangelogEntry {
   version: string;
@@ -14,6 +14,22 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+
+  {
+    version: '0.16.0-wip',
+    date: '2026-03-18',
+    changes: [
+      'Add PostWorkoutTabs component (Exercises | Cardio | Pullups | Summary)',
+      'Add ExercisesReview component (read-only exercise cards)',
+      'ActiveWorkoutPage: two modes (active workout / post-finish tabs)',
+      'WorkoutHeader: postFinish prop hides action buttons',
+      'workoutStore: add postFinish, activeTab, pullupInProgress state',
+      'Types: add PostWorkoutTab, PullupInProgressState, update WorkoutSnapshot',
+      'Snapshot persistence includes post-finish state for crash resilience',                  
+      'WIP: PullupStep still uses local state — switching tabs resets pullup',  
+      'progress. Next step: move pullup execution state into workoutStore.',
+    ],
+  }, 
 
   {
     version: '0.15.0',

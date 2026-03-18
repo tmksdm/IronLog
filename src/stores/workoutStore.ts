@@ -14,6 +14,8 @@ import type {
   CardioType,
   Exercise,
   PullupStepResult,
+  PostWorkoutTab,
+  PullupInProgressState,
 } from '../types';
 import {
   exerciseRepo,
@@ -68,6 +70,11 @@ export interface WorkoutState {
   pullupResult: PullupStepResult | null;
   _isRestoring: boolean;
 
+  // Post-finish tab state (v0.16)
+  postFinish: boolean;
+  activeTab: PostWorkoutTab;
+  pullupInProgress: PullupInProgressState | null;
+
   startWorkout: (
     dayTypeId: DayTypeId,
     direction: Direction,
@@ -95,6 +102,12 @@ export interface WorkoutState {
   stopStopwatch: () => void;
   resetStopwatch: () => void;
   tickStopwatch: () => void;
+
+  // Post-finish actions (v0.16)
+  enterPostFinish: () => void;
+  setActiveTab: (tab: PostWorkoutTab) => void;
+  setPullupInProgress: (state: PullupInProgressState | null) => void;
+  updatePullupInProgress: (updates: Partial<PullupInProgressState>) => void;
 }
 
 // ---- Helpers ----
@@ -122,6 +135,9 @@ function buildSnapshot(state: WorkoutState): WorkoutSnapshot | null {
     isCardioCompleted: state.isCardioCompleted,
     restTimerDefault: state.restTimerDefault,
     pullupResult: state.pullupResult,
+    postFinish: state.postFinish,
+    activeTab: state.activeTab,
+    pullupInProgress: state.pullupInProgress,
   };
 }
 
@@ -175,6 +191,11 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
   isCardioCompleted: false,
   pullupResult: null,
   _isRestoring: false,
+
+  // Post-finish (v0.16)
+  postFinish: false,
+  activeTab: 'cardio',
+  pullupInProgress: null,
 
   // =======================================
   // START WORKOUT
@@ -264,6 +285,9 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
         treadmillSucceeded: null,
         isCardioCompleted: false,
         pullupResult: null,
+        postFinish: false,
+        activeTab: 'cardio',
+        pullupInProgress: null,
       });
 
       persistState(get());
@@ -293,6 +317,9 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
       isRestTimerRunning: false,
       stopwatchSeconds: 0,
       isStopwatchRunning: false,
+      postFinish: snapshot.postFinish ?? false,
+      activeTab: snapshot.activeTab ?? 'cardio',
+      pullupInProgress: snapshot.pullupInProgress ?? null,
     });
     setTimeout(() => set({ _isRestoring: false }), 0);
   },
@@ -304,6 +331,35 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
     const { session } = get();
     if (!session || session.timeEnd) return;
     set({ session: { ...session, timeEnd: new Date().toISOString() } });
+    persistState(get());
+  },
+
+  // =======================================
+  // ENTER POST-FINISH MODE (v0.16)
+  // =======================================
+  enterPostFinish: () => {
+    const state = get();
+    if (!state.session || state.session.timeEnd) {
+      // recordEndTime not called yet — do nothing, caller should call recordEndTime first
+    }
+    set({ postFinish: true, activeTab: 'cardio' });
+    persistState(get());
+  },
+
+  setActiveTab: (tab) => {
+    set({ activeTab: tab });
+    persistState(get());
+  },
+
+  setPullupInProgress: (pullupState) => {
+    set({ pullupInProgress: pullupState });
+    persistState(get());
+  },
+
+  updatePullupInProgress: (updates) => {
+    const current = get().pullupInProgress;
+    if (!current) return;
+    set({ pullupInProgress: { ...current, ...updates } });
     persistState(get());
   },
 
@@ -400,7 +456,7 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
       const finishedSession = await workoutRepo.getWorkoutSessionById(session.id);
       await workoutStateRepo.clearWorkoutState();
 
-      // Sync to cloud (fire and forget  don't block UI)
+      // Sync to cloud (fire and forget — don't block UI)
       pushToCloud().catch((err) =>
         console.error('Cloud sync after workout failed:', err)
       );
@@ -421,6 +477,9 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
         treadmillSucceeded: null,
         isCardioCompleted: false,
         pullupResult: null,
+        postFinish: false,
+        activeTab: 'cardio',
+        pullupInProgress: null,
       });
 
       return finishedSession;
@@ -460,6 +519,9 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
       treadmillSucceeded: null,
       isCardioCompleted: false,
       pullupResult: null,
+      postFinish: false,
+      activeTab: 'cardio',
+      pullupInProgress: null,
     });
   },
 
