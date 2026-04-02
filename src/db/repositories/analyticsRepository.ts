@@ -73,8 +73,8 @@ export async function getMonthlyTonnage(
   const db = await getDb();
   let query = `
     SELECT
-      CAST(strftime('%Y', date) AS INTEGER) as year,
-      CAST(strftime('%m', date) AS INTEGER) as month,
+      CAST(strftime('%Y', date, 'localtime') AS INTEGER) as year,
+      CAST(strftime('%m', date, 'localtime') AS INTEGER) as month,
       AVG(total_kg) as avg_total_kg,
       COUNT(*) as workout_count
     FROM workout_sessions
@@ -105,8 +105,8 @@ export async function getYearlyTonnage(
   const db = await getDb();
   let innerQuery = `
     SELECT
-      CAST(strftime('%Y', date) AS INTEGER) as year,
-      CAST(strftime('%m', date) AS INTEGER) as month,
+      CAST(strftime('%Y', date, 'localtime') AS INTEGER) as year,
+      CAST(strftime('%m', date, 'localtime') AS INTEGER) as month,
       AVG(total_kg) as monthly_avg,
       COUNT(*) as cnt
     FROM workout_sessions
@@ -173,8 +173,8 @@ export async function getMonthlyBodyWeight(): Promise<MonthlyBodyWeight[]> {
   const db = await getDb();
   const result = await db.query(
     `SELECT
-       CAST(strftime('%Y', date) AS INTEGER) as year,
-       CAST(strftime('%m', date) AS INTEGER) as month,
+       CAST(strftime('%Y', date, 'localtime') AS INTEGER) as year,
+       CAST(strftime('%m', date, 'localtime') AS INTEGER) as month,
        AVG(
          CASE
            WHEN weight_before IS NOT NULL AND weight_after IS NOT NULL
@@ -209,8 +209,8 @@ export async function getYearlyBodyWeight(): Promise<YearlyBodyWeight[]> {
        SUM(cnt) as measurement_count
      FROM (
        SELECT
-         CAST(strftime('%Y', date) AS INTEGER) as year,
-         CAST(strftime('%m', date) AS INTEGER) as month,
+         CAST(strftime('%Y', date, 'localtime') AS INTEGER) as year,
+         CAST(strftime('%m', date, 'localtime') AS INTEGER) as month,
          AVG(
            CASE
              WHEN weight_before IS NOT NULL AND weight_after IS NOT NULL
@@ -244,8 +244,8 @@ export async function getMonthlyDuration(): Promise<MonthlyDuration[]> {
   const db = await getDb();
   const result = await db.query(
     `SELECT
-       CAST(strftime('%Y', date) AS INTEGER) as year,
-       CAST(strftime('%m', date) AS INTEGER) as month,
+       CAST(strftime('%Y', date, 'localtime') AS INTEGER) as year,
+       CAST(strftime('%m', date, 'localtime') AS INTEGER) as month,
        AVG(
          (julianday(time_end) - julianday(time_start)) * 24 * 60
        ) as avg_duration_min,
@@ -274,8 +274,8 @@ export async function getYearlyDuration(): Promise<YearlyDuration[]> {
        SUM(cnt) as workout_count
      FROM (
        SELECT
-         CAST(strftime('%Y', date) AS INTEGER) as year,
-         CAST(strftime('%m', date) AS INTEGER) as month,
+         CAST(strftime('%Y', date, 'localtime') AS INTEGER) as year,
+         CAST(strftime('%m', date, 'localtime') AS INTEGER) as month,
          AVG(
            (julianday(time_end) - julianday(time_start)) * 24 * 60
          ) as monthly_avg,
@@ -303,8 +303,8 @@ export async function getMonthlyRunTime(): Promise<MonthlyRunTime[]> {
   const db = await getDb();
   const result = await db.query(
     `SELECT
-       CAST(strftime('%Y', ws.date) AS INTEGER) as year,
-       CAST(strftime('%m', ws.date) AS INTEGER) as month,
+       CAST(strftime('%Y', ws.date, 'localtime') AS INTEGER) as year,
+       CAST(strftime('%m', ws.date, 'localtime') AS INTEGER) as month,
        AVG(cl.duration_seconds) as avg_duration_sec,
        COUNT(*) as run_count
      FROM cardio_logs cl
@@ -334,8 +334,8 @@ export async function getYearlyRunTime(): Promise<YearlyRunTime[]> {
        SUM(cnt) as run_count
      FROM (
        SELECT
-         CAST(strftime('%Y', ws.date) AS INTEGER) as year,
-         CAST(strftime('%m', ws.date) AS INTEGER) as month,
+         CAST(strftime('%Y', ws.date, 'localtime') AS INTEGER) as year,
+         CAST(strftime('%m', ws.date, 'localtime') AS INTEGER) as month,
          AVG(cl.duration_seconds) as monthly_avg,
          COUNT(*) as cnt
        FROM cardio_logs cl

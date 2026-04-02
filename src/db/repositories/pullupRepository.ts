@@ -144,13 +144,14 @@ function monthLabel(year: number, month: number): string {
 
 /**
  * Get monthly total pull-up reps (sum, not average — total per month).
+ * Uses 'localtime' modifier to group by device-local month, not UTC.
  */
 export async function getMonthlyPullups(): Promise<MonthlyPullups[]> {
   const db = await getDb();
   const result = await db.query(
     `SELECT
-       CAST(strftime('%Y', ws.date) AS INTEGER) as year,
-       CAST(strftime('%m', ws.date) AS INTEGER) as month,
+       CAST(strftime('%Y', ws.date, 'localtime') AS INTEGER) as year,
+       CAST(strftime('%m', ws.date, 'localtime') AS INTEGER) as month,
        SUM(pl.reps) as total_reps,
        COUNT(DISTINCT pl.workout_session_id) as session_count
      FROM pullup_logs pl
@@ -171,12 +172,13 @@ export async function getMonthlyPullups(): Promise<MonthlyPullups[]> {
 
 /**
  * Get yearly total pull-up reps.
+ * Uses 'localtime' modifier to group by device-local year, not UTC.
  */
 export async function getYearlyPullups(): Promise<YearlyPullups[]> {
   const db = await getDb();
   const result = await db.query(
     `SELECT
-       CAST(strftime('%Y', ws.date) AS INTEGER) as year,
+       CAST(strftime('%Y', ws.date, 'localtime') AS INTEGER) as year,
        SUM(pl.reps) as total_reps,
        COUNT(DISTINCT pl.workout_session_id) as session_count
      FROM pullup_logs pl
