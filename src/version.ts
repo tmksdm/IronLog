@@ -5,7 +5,7 @@
  * Update this file with each release.
  */
 
-export const APP_VERSION = '0.17.0';
+export const APP_VERSION = '0.17.1';
 
 export interface ChangelogEntry {
   version: string;
@@ -14,6 +14,16 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+
+  {
+    version: '0.17.1',
+    date: '2026-04-02',
+    changes: [
+      'Кнопка «Пропустить» в кардио переключает на таб подтягиваний',
+      'Зелёная точка над табом «Упражнения» после завершения тренировки',
+      'Возможность редактировать повторения в обзоре упражнений после завершения',
+    ],
+  },
 
   {
     version: '0.17.0',

@@ -31,6 +31,7 @@ export function PostWorkoutTabs() {
 
         // Show a green dot if tab has completed data
         const hasData =
+          tab.id === 'exercises' ||
           (tab.id === 'cardio' && isCardioCompleted) ||
           (tab.id === 'pullups' && pullupResult !== null);
 

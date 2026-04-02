@@ -1,12 +1,13 @@
 // src/components/workout/ExercisesReview.tsx
 
 /**
- * Read-only review of exercises after workout is finished.
- * Shows the same cards but without interactive controls.
+ * Review of exercises after workout is finished.
+ * Allows editing actual reps on completed sets via ± stepper.
  */
 
+import { useState } from 'react';
 import { useWorkoutStore } from '../../stores/workoutStore';
-import type { ActiveExercise } from '../../stores/workoutStore';
+import type { ActiveExercise, ActiveSet } from '../../stores/workoutStore';
 import { Card } from '../ui';
 import { formatWeight, formatDecimal } from '../../utils/format';
 import {
@@ -16,20 +17,29 @@ import {
   CheckCircle2,
   CircleDot,
   CircleOff,
+  Minus,
+  Plus,
 } from 'lucide-react';
 import { getDayTypeColor } from '../../theme';
 
-// ---- Read-only set row ----
+// ---- Editable set row ----
 
-function ReadOnlySetRow({
+function EditableSetRow({
   set,
+  setIndex,
+  exerciseIndex,
   hasWeight,
   isWarmup,
 }: {
-  set: { setNumber: number; setType: string; weight: number; targetReps: number; actualReps: number | null; isCompleted: boolean };
+  set: ActiveSet;
+  setIndex: number;
+  exerciseIndex: number;
   hasWeight: boolean;
   isWarmup: boolean;
 }) {
+  const updateSetReps = useWorkoutStore((s) => s.updateSetReps);
+  const [isEditing, setIsEditing] = useState(false);
+
   const displayReps = set.actualReps ?? set.targetReps;
   const isCompleted = set.isCompleted;
 
@@ -47,6 +57,11 @@ function ReadOnlySetRow({
   if (isCompleted) {
     rowBg = isWarmup ? 'bg-green-900/15' : 'bg-green-900/25';
   }
+
+  const handleRepsChange = (delta: number) => {
+    const newReps = Math.max(0, displayReps + delta);
+    updateSetReps(exerciseIndex, setIndex, newReps);
+  };
 
   return (
     <div className={`flex items-center rounded-xl px-3 ${rowPy} ${rowBg} gap-2`}>
@@ -74,38 +89,76 @@ function ReadOnlySetRow({
         </span>
       )}
 
-      {/* Reps */}
-      <div className="flex-1 flex items-center justify-end">
-        <span
-          className={`${repsSize} font-bold ${
-            isCompleted
-              ? displayReps < set.targetReps
-                ? 'text-orange-400'
-                : displayReps > set.targetReps
-                  ? 'text-blue-400'
-                  : 'text-green-400'
-              : isWarmup
-                ? 'text-[#B0B0B0]'
-                : 'text-[#707070]'
-          }`}
-        >
-          {isCompleted ? displayReps : set.targetReps}
-          {isCompleted && displayReps !== set.targetReps && (
-            <span className="text-xs text-[#707070] ml-1">/{set.targetReps}</span>
-          )}
-        </span>
+      {/* Reps area */}
+      <div className="flex-1 flex items-center justify-end gap-2">
+        {isEditing && isCompleted ? (
+          // Stepper mode
+          <div className="flex items-center gap-1.5">
+            <button
+              className="w-10 h-10 rounded-full bg-[#333] active:bg-[#444] flex items-center justify-center"
+              onClick={() => handleRepsChange(-1)}
+            >
+              <Minus size={18} className="text-white" />
+            </button>
+
+            <span className="text-xl font-bold text-white min-w-10 text-center">
+              {displayReps}
+            </span>
+
+            <button
+              className="w-10 h-10 rounded-full bg-[#333] active:bg-[#444] flex items-center justify-center"
+              onClick={() => handleRepsChange(1)}
+            >
+              <Plus size={18} className="text-white" />
+            </button>
+
+            <button
+              className="w-10 h-10 rounded-full bg-green-600 active:bg-green-700 flex items-center justify-center ml-1"
+              onClick={() => setIsEditing(false)}
+            >
+              <Check size={18} className="text-white" />
+            </button>
+          </div>
+        ) : (
+          // Display mode — tap to edit (only completed sets)
+          <button
+            className={`
+              ${repsSize} font-bold min-w-10 text-center rounded-lg px-2 py-1
+              ${isCompleted
+                ? displayReps < set.targetReps
+                  ? 'text-orange-400'
+                  : displayReps > set.targetReps
+                    ? 'text-blue-400'
+                    : 'text-green-400'
+                : isWarmup
+                  ? 'text-[#B0B0B0]'
+                  : 'text-[#707070]'
+              }
+              ${isCompleted ? 'active:bg-white/10' : ''}
+            `}
+            onClick={() => isCompleted && setIsEditing(true)}
+            disabled={!isCompleted}
+          >
+            {isCompleted ? displayReps : set.targetReps}
+            {isCompleted && displayReps !== set.targetReps && (
+              <span className="text-xs text-[#707070] ml-1">/{set.targetReps}</span>
+            )}
+          </button>
+        )}
       </div>
     </div>
   );
 }
 
-// ---- Read-only exercise card ----
+// ---- Exercise card ----
 
-function ReadOnlyExerciseCard({
+function ReviewExerciseCard({
   activeExercise,
+  exerciseIndex,
   dayTypeId,
 }: {
   activeExercise: ActiveExercise;
+  exerciseIndex: number;
   dayTypeId: number;
 }) {
   const { exercise, sets, status, isPriority } = activeExercise;
@@ -158,13 +211,15 @@ function ReadOnlyExerciseCard({
         </div>
       </div>
 
-      {/* Sets */}
+      {/* Sets — editable */}
       {!isSkipped && sets.length > 0 && (
         <div className="flex flex-col gap-1.5">
-          {sets.map((s) => (
-            <ReadOnlySetRow
+          {sets.map((s, idx) => (
+            <EditableSetRow
               key={s.id}
               set={s}
+              setIndex={idx}
+              exerciseIndex={exerciseIndex}
               hasWeight={exercise.hasAddedWeight}
               isWarmup={s.setType === 'warmup'}
             />
@@ -201,10 +256,11 @@ export function ExercisesReview() {
 
   return (
     <div className="flex flex-col gap-4 py-4 px-4">
-      {exercises.map((ae) => (
-        <ReadOnlyExerciseCard
+      {exercises.map((ae, idx) => (
+        <ReviewExerciseCard
           key={ae.exercise.id}
           activeExercise={ae}
+          exerciseIndex={idx}
           dayTypeId={dayTypeId}
         />
       ))}

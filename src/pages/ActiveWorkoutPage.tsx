@@ -162,7 +162,8 @@ export function ActiveWorkoutPage() {
 
   // CardioStep calls onNext when done (saved or skipped)
   const handleCardioNext = useCallback(() => {
-    // No-op: data is already in store. User can freely switch tabs.
+    // Skip cardio → switch to pullups tab
+    useWorkoutStore.getState().setActiveTab('pullups');
   }, []);
 
   // PullupStep calls onNext with result when completed
