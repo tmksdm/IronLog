@@ -75,6 +75,9 @@ export interface WorkoutState {
   activeTab: PostWorkoutTab;
   pullupInProgress: PullupInProgressState | null;
 
+  // Rest timer finish callback (for pullups integration)
+  onRestTimerFinish: (() => void) | null;
+
   startWorkout: (
     dayTypeId: DayTypeId,
     direction: Direction,
@@ -96,8 +99,10 @@ export interface WorkoutState {
   savePullupResult: (result: PullupStepResult | null) => void;
   setRestTimerDefault: (seconds: number) => void;
   startRestTimer: () => void;
+  startRestTimerWithDuration: (seconds: number) => void;
   stopRestTimer: () => void;
   tickRestTimer: () => void;
+  setOnRestTimerFinish: (cb: (() => void) | null) => void;
   startStopwatch: () => void;
   stopStopwatch: () => void;
   resetStopwatch: () => void;
@@ -213,6 +218,9 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
   activeTab: 'cardio',
   pullupInProgress: null,
 
+  // Rest timer finish callback
+  onRestTimerFinish: null,
+
   // =======================================
   // START WORKOUT
   // =======================================
@@ -304,6 +312,7 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
         postFinish: false,
         activeTab: 'cardio',
         pullupInProgress: null,
+        onRestTimerFinish: null,
       });
 
       persistState(get());
@@ -336,6 +345,7 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
       postFinish: snapshot.postFinish ?? false,
       activeTab: snapshot.activeTab ?? 'cardio',
       pullupInProgress: snapshot.pullupInProgress ?? null,
+      onRestTimerFinish: null,
     });
     setTimeout(() => set({ _isRestoring: false }), 0);
   },
@@ -496,6 +506,7 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
         postFinish: false,
         activeTab: 'cardio',
         pullupInProgress: null,
+        onRestTimerFinish: null,
       });
 
       return finishedSession;
@@ -538,6 +549,7 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
       postFinish: false,
       activeTab: 'cardio',
       pullupInProgress: null,
+      onRestTimerFinish: null,
     });
   },
 
@@ -717,15 +729,32 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
     set({ restTimerSeconds: defaultSeconds, isRestTimerRunning: true });
   },
 
+  startRestTimerWithDuration: (seconds: number) => {
+    set({ restTimerSeconds: seconds, isRestTimerRunning: true });
+  },
+
   stopRestTimer: () => {
     set({ isRestTimerRunning: false, restTimerSeconds: 0 });
+  },
+
+  setOnRestTimerFinish: (cb) => {
+    set({ onRestTimerFinish: cb });
   },
 
   tickRestTimer: () => {
     set((state) => {
       if (!state.isRestTimerRunning) return state;
       const next = state.restTimerSeconds - 1;
-      if (next <= 0) return { restTimerSeconds: 0, isRestTimerRunning: false };
+      if (next <= 0) {
+        // Fire the callback (if any) after state update
+        if (state.onRestTimerFinish) {
+          setTimeout(() => {
+            const current = get().onRestTimerFinish;
+            if (current) current();
+          }, 0);
+        }
+        return { restTimerSeconds: 0, isRestTimerRunning: false };
+      }
       return { restTimerSeconds: next };
     });
   },

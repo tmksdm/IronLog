@@ -2,7 +2,10 @@
 
 /**
  * Global application store.
- * Holds day types, next workout info, crash resilience state, and sync status.
+ *
+ * App always starts on LOCAL data (instant).
+ * Cloud pull only happens if local DB is empty (new device / reinstall).
+ * Cloud push happens after workout finish, import, exercise edits.
  */
 
 import { create } from 'zustand';
@@ -64,28 +67,17 @@ export const useAppStore = create<AppState>((set, get) => ({
 
     set({ isLoading: true });
     try {
-      // Pull cloud data first (replaces local if cloud has data)
-      set({ isSyncing: true, lastSyncError: null });
-      try {
-        await pullFromCloud();
-      } catch (err: any) {
-        console.error('Cloud sync failed, using local data:', err);
-        set({ lastSyncError: err?.message ?? 'Sync failed' });
-      } finally {
-        set({ isSyncing: false });
-      }
-
+      // 1. Load from LOCAL data first — instant, no network
       const dayTypes = await dayTypeRepo.getAllDayTypes();
       const nextDayTypeId = await dayTypeRepo.getNextDayTypeId();
 
-      // Direction is global: based on the LAST session of ANY type
       const allSessions = await workoutRepo.getAllSessions(1);
       const lastSession = allSessions.length > 0 ? allSessions[0] : null;
       const nextDirection = getDirectionForNextSession(
         lastSession?.direction ?? null
       );
 
-      // Check for saved workout state (crash resilience)
+      // Check for crash-resilience snapshot
       let pendingRestore: WorkoutSnapshot | null = null;
       try {
         const snapshot = await workoutStateRepo.loadWorkoutState();
@@ -103,6 +95,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         console.error('Failed to check for saved workout state:', err);
       }
 
+      // Show the app immediately
       set({
         dayTypes,
         nextDayTypeId,
@@ -112,6 +105,27 @@ export const useAppStore = create<AppState>((set, get) => ({
         isInitialized: true,
         pendingRestore,
       });
+
+      // 2. Try cloud pull in background.
+      // pullFromCloud() internally checks: if local has data → skips.
+      // Only pulls if local is empty (new device / reinstall).
+      set({ isSyncing: true, lastSyncError: null });
+      pullFromCloud()
+        .then(async (hadChanges) => {
+          if (hadChanges) {
+            // Restored from cloud into empty local DB — refresh UI
+            await get().refreshNextDayInfo();
+            console.log('Restored data from cloud (local was empty)');
+          }
+        })
+        .catch((err: any) => {
+          // Server unreachable — no problem, local data is fine
+          console.error('Cloud sync failed:', err);
+          set({ lastSyncError: err?.message ?? 'Sync failed' });
+        })
+        .finally(() => {
+          set({ isSyncing: false });
+        });
     } catch (error) {
       console.error('Failed to initialize app store:', error);
       set({ isLoading: false });

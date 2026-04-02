@@ -5,12 +5,15 @@
  * All execution state is stored in workoutStore.pullupInProgress
  * so that switching tabs or app crash doesn't lose progress.
  *
+ * Rest timer uses the global RestTimer (workoutStore) so it can be
+ * collapsed/expanded and works across tab switches.
+ *
  * NOTE: Pull-up program progression is NOT applied here.
  * It is deferred to ActiveWorkoutPage.handleFinalSave() so that
  * deleting a test workout doesn't leave stale progression in localStorage.
  */
 
-import { useEffect, useCallback, useRef, useState } from 'react';
+import { useEffect, useCallback, useRef } from 'react';
 import { useWorkoutStore } from '../../stores/workoutStore';
 import {
   loadPullupProgram,
@@ -59,95 +62,28 @@ function buildInitialState(plan: ReturnType<typeof buildDayPlan>): PullupInProgr
   };
 }
 
-// ---- Rest Timer Component ----
-// Uses its OWN local state for the countdown to avoid hammering the store every second.
-// Only writes to store on finish (rest complete).
+// ---- Resting Indicator (shown inline when global timer is running) ----
 
-function RestTimer({
-  initialSeconds,
-  totalSeconds,
-  onFinish,
-}: {
-  initialSeconds: number;
-  totalSeconds: number;
-  onFinish: () => void;
-}) {
-  const [left, setLeft] = useState(initialSeconds);
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const onFinishRef = useRef(onFinish);
-  onFinishRef.current = onFinish;
+function RestingIndicator({ state }: { state: PullupInProgressState }) {
+  const isTimerRunning = useWorkoutStore((s) => s.isRestTimerRunning);
 
-  // Start interval on mount
-  useEffect(() => {
-    intervalRef.current = setInterval(() => {
-      setLeft((prev) => {
-        if (prev <= 1) {
-          if (intervalRef.current) clearInterval(intervalRef.current);
-          // Use setTimeout to avoid calling setState during render
-          setTimeout(() => onFinishRef.current(), 0);
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
+  if (!state.isResting || !isTimerRunning) return null;
 
-    return () => {
-      if (intervalRef.current) clearInterval(intervalRef.current);
-    };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const handleSkip = useCallback(() => {
-    if (intervalRef.current) clearInterval(intervalRef.current);
-    onFinishRef.current();
-  }, []);
-
-  const min = Math.floor(left / 60);
-  const sec = left % 60;
-
-  // SVG ring
-  const SIZE = 200;
-  const STROKE = 10;
-  const radius = (SIZE - STROKE) / 2;
-  const circumference = 2 * Math.PI * radius;
-  const progress = totalSeconds > 0 ? left / totalSeconds : 0;
-  const offset = circumference * (1 - progress);
+  // Show a simple indicator — the actual timer is the global RestTimer
+  // (expanded or collapsed bubble). This just tells the user what's happening.
+  const sets = state.completedSets;
+  const total = state.plan.plannedSets ?? 5;
+  const doneSets = sets.length;
 
   return (
-    <div className="flex flex-col items-center gap-3">
-      <p className="text-sm text-[#B0B0B0]">Отдых</p>
-      <div className="relative flex items-center justify-center">
-        <svg width={SIZE} height={SIZE} className="-rotate-90">
-          <circle
-            cx={SIZE / 2}
-            cy={SIZE / 2}
-            r={radius}
-            fill="none"
-            stroke="#333333"
-            strokeWidth={STROKE}
-          />
-          <circle
-            cx={SIZE / 2}
-            cy={SIZE / 2}
-            r={radius}
-            fill="none"
-            stroke="#FF9800"
-            strokeWidth={STROKE}
-            strokeLinecap="round"
-            strokeDasharray={circumference}
-            strokeDashoffset={offset}
-            className="transition-[stroke-dashoffset] duration-1000 linear"
-          />
-        </svg>
-        <span className="absolute text-5xl font-bold text-white font-mono">
-          {min}:{sec.toString().padStart(2, '0')}
-        </span>
-      </div>
-      <button
-        onClick={handleSkip}
-        className="px-6 py-2.5 rounded-xl bg-[#2A2A2A] text-[#B0B0B0] text-sm font-semibold active:bg-[#333333] transition-colors"
-      >
-        Пропустить отдых
-      </button>
+    <div className="flex flex-col items-center gap-3 py-4">
+      <p className="text-sm text-[#B0B0B0]">Отдых между подходами</p>
+      <p className="text-xs text-[#707070]">
+        Выполнено подходов: {doneSets} из {total}
+      </p>
+      <p className="text-xs text-[#555555]">
+        Нажмите на таймер, чтобы развернуть/свернуть
+      </p>
     </div>
   );
 }
@@ -158,15 +94,18 @@ function Day1Max({
   stateRef,
   onUpdate,
   onComplete,
+  onStartRest,
 }: {
   stateRef: React.MutableRefObject<PullupInProgressState>;
   onUpdate: (updates: Partial<PullupInProgressState>) => void;
   onComplete: (sets: PullupInProgressState['completedSets']) => void;
+  onStartRest: (seconds: number) => void;
 }) {
   const state = stateRef.current;
   const TOTAL_SETS = state.plan.plannedSets ?? 5;
   const sets = state.completedSets;
   const currentSet = sets.length + 1;
+  const isTimerRunning = useWorkoutStore((s) => s.isRestTimerRunning);
 
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -195,27 +134,15 @@ function Day1Max({
         restSecondsLeft: restSec,
         restSecondsTotal: restSec,
       });
+      onStartRest(restSec);
     }
 
     if (inputRef.current) inputRef.current.value = '';
-  }, [stateRef, onUpdate, onComplete]);
+  }, [stateRef, onUpdate, onComplete, onStartRest]);
 
-  const handleRestFinish = useCallback(() => {
-    onUpdate({
-      isResting: false,
-      restSecondsLeft: 0,
-      restSecondsTotal: 0,
-    });
-  }, [onUpdate]);
-
-  if (state.isResting && state.restSecondsLeft > 0) {
-    return (
-      <RestTimer
-        initialSeconds={state.restSecondsLeft}
-        totalSeconds={state.restSecondsTotal}
-        onFinish={handleRestFinish}
-      />
-    );
+  // Show resting indicator when timer is running
+  if (state.isResting && isTimerRunning) {
+    return <RestingIndicator state={state} />;
   }
 
   return (
@@ -272,16 +199,19 @@ function Day2Ladder({
   stateRef,
   onUpdate,
   onComplete,
+  onStartRest,
 }: {
   stateRef: React.MutableRefObject<PullupInProgressState>;
   onUpdate: (updates: Partial<PullupInProgressState>) => void;
   onComplete: (sets: PullupInProgressState['completedSets']) => void;
+  onStartRest: (seconds: number) => void;
 }) {
   const state = stateRef.current;
   const sets = state.completedSets;
   const currentStep = state.currentSetIndex || 1;
   const failed = state.ladderFailed;
   const finalSet = state.ladderFinalSet;
+  const isTimerRunning = useWorkoutStore((s) => s.isRestTimerRunning);
 
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -304,7 +234,8 @@ function Day2Ladder({
       restSecondsLeft: restSec,
       restSecondsTotal: restSec,
     });
-  }, [stateRef, onUpdate]);
+    onStartRest(restSec);
+  }, [stateRef, onUpdate, onStartRest]);
 
   const handleStepFail = useCallback(() => {
     onUpdate({ ladderFailed: true });
@@ -334,9 +265,10 @@ function Day2Ladder({
       restSecondsLeft: restSec,
       restSecondsTotal: restSec,
     });
+    onStartRest(restSec);
 
     if (inputRef.current) inputRef.current.value = '';
-  }, [stateRef, onUpdate]);
+  }, [stateRef, onUpdate, onStartRest]);
 
   const handleFinalConfirm = useCallback(() => {
     const val = parseInt(inputRef.current?.value ?? '', 10);
@@ -354,32 +286,9 @@ function Day2Ladder({
     onComplete([...s.completedSets, result]);
   }, [stateRef, onComplete]);
 
-  const handleRestFinish = useCallback(() => {
-    const s = stateRef.current;
-    if (s.ladderFinalSet) {
-      onUpdate({
-        isResting: false,
-        restSecondsLeft: 0,
-        restSecondsTotal: 0,
-      });
-    } else {
-      onUpdate({
-        isResting: false,
-        restSecondsLeft: 0,
-        restSecondsTotal: 0,
-        currentSetIndex: (s.currentSetIndex || 1) + 1,
-      });
-    }
-  }, [stateRef, onUpdate]);
-
-  if (state.isResting && state.restSecondsLeft > 0) {
-    return (
-      <RestTimer
-        initialSeconds={state.restSecondsLeft}
-        totalSeconds={state.restSecondsTotal}
-        onFinish={handleRestFinish}
-      />
-    );
+  // Show resting indicator when timer is running
+  if (state.isResting && isTimerRunning) {
+    return <RestingIndicator state={state} />;
   }
 
   // Final max set (after rest)
@@ -492,10 +401,12 @@ function Day34Grips({
   stateRef,
   onUpdate,
   onComplete,
+  onStartRest,
 }: {
   stateRef: React.MutableRefObject<PullupInProgressState>;
   onUpdate: (updates: Partial<PullupInProgressState>) => void;
   onComplete: (sets: PullupInProgressState['completedSets']) => void;
+  onStartRest: (seconds: number) => void;
 }) {
   const state = stateRef.current;
   const totalSets = state.plan.plannedSets ?? 9;
@@ -505,6 +416,7 @@ function Day34Grips({
   const sets = state.completedSets;
   const currentSet = state.currentSetIndex;
   const currentGrip = grips[currentSet] ?? 'normal';
+  const isTimerRunning = useWorkoutStore((s) => s.isRestTimerRunning);
 
   const handleSuccess = useCallback(() => {
     const s = stateRef.current;
@@ -533,8 +445,9 @@ function Day34Grips({
         restSecondsLeft: restSec,
         restSecondsTotal: restSec,
       });
+      onStartRest(restSec);
     }
-  }, [stateRef, onUpdate, onComplete]);
+  }, [stateRef, onUpdate, onComplete, onStartRest]);
 
   const handleFail = useCallback(() => {
     const s = stateRef.current;
@@ -563,27 +476,13 @@ function Day34Grips({
         restSecondsLeft: restSec,
         restSecondsTotal: restSec,
       });
+      onStartRest(restSec);
     }
-  }, [stateRef, onUpdate, onComplete]);
+  }, [stateRef, onUpdate, onComplete, onStartRest]);
 
-  const handleRestFinish = useCallback(() => {
-    const s = stateRef.current;
-    onUpdate({
-      isResting: false,
-      restSecondsLeft: 0,
-      restSecondsTotal: 0,
-      currentSetIndex: s.currentSetIndex + 1,
-    });
-  }, [stateRef, onUpdate]);
-
-  if (state.isResting && state.restSecondsLeft > 0) {
-    return (
-      <RestTimer
-        initialSeconds={state.restSecondsLeft}
-        totalSeconds={state.restSecondsTotal}
-        onFinish={handleRestFinish}
-      />
-    );
+  // Show resting indicator when timer is running
+  if (state.isResting && isTimerRunning) {
+    return <RestingIndicator state={state} />;
   }
 
   // Group indicator
@@ -729,13 +628,12 @@ export default function PullupStep({ onNext }: PullupStepProps) {
   const pullupResult = useWorkoutStore((s) => s.pullupResult);
   const setPullupInProgress = useWorkoutStore((s) => s.setPullupInProgress);
   const updatePullupInProgress = useWorkoutStore((s) => s.updatePullupInProgress);
+  const startRestTimerWithDuration = useWorkoutStore((s) => s.startRestTimerWithDuration);
+  const setOnRestTimerFinish = useWorkoutStore((s) => s.setOnRestTimerFinish);
 
   // Keep a ref to the latest state so child callbacks don't need state as dependency
   const stateRef = useRef<PullupInProgressState | null>(pullupInProgress);
   stateRef.current = pullupInProgress;
-
-  // Force re-render when store updates (stateRef alone won't trigger render)
-  // pullupInProgress from useWorkoutStore already does this via Zustand subscription.
 
   // Initialize pullupInProgress on first mount if not already set and no result
   const initialized = useRef(false);
@@ -749,12 +647,71 @@ export default function PullupStep({ onNext }: PullupStepProps) {
     }
   }, [pullupInProgress, pullupResult, setPullupInProgress]);
 
+  // Register the rest timer finish callback for pullup rest transitions
+  useEffect(() => {
+    if (!pullupInProgress?.isResting) {
+      // No rest in progress — clear callback
+      return;
+    }
+
+    const handleRestFinish = () => {
+      const s = stateRef.current;
+      if (!s || !s.isResting) return;
+
+      if (s.plan.effectiveDay === 2 && !s.ladderFinalSet) {
+        // Ladder: advance to next step
+        updatePullupInProgress({
+          isResting: false,
+          restSecondsLeft: 0,
+          restSecondsTotal: 0,
+          currentSetIndex: (s.currentSetIndex || 1) + 1,
+        });
+      } else if (s.plan.effectiveDay === 2 && s.ladderFinalSet) {
+        // Ladder: after failure rest, show final max set
+        updatePullupInProgress({
+          isResting: false,
+          restSecondsLeft: 0,
+          restSecondsTotal: 0,
+        });
+      } else if (s.plan.effectiveDay === 3 || s.plan.effectiveDay === 4) {
+        // Grip days: advance to next set
+        updatePullupInProgress({
+          isResting: false,
+          restSecondsLeft: 0,
+          restSecondsTotal: 0,
+          currentSetIndex: s.currentSetIndex + 1,
+        });
+      } else {
+        // Day 1: just clear rest
+        updatePullupInProgress({
+          isResting: false,
+          restSecondsLeft: 0,
+          restSecondsTotal: 0,
+        });
+      }
+    };
+
+    setOnRestTimerFinish(handleRestFinish);
+
+    return () => {
+      // Cleanup: only clear if our callback is still the active one
+      setOnRestTimerFinish(null);
+    };
+  }, [pullupInProgress?.isResting, pullupInProgress?.plan.effectiveDay, pullupInProgress?.ladderFinalSet, updatePullupInProgress, setOnRestTimerFinish]);
+
   // Stable callbacks that read from stateRef
   const handleUpdate = useCallback(
     (updates: Partial<PullupInProgressState>) => {
       updatePullupInProgress(updates);
     },
     [updatePullupInProgress]
+  );
+
+  const handleStartRest = useCallback(
+    (seconds: number) => {
+      startRestTimerWithDuration(seconds);
+    },
+    [startRestTimerWithDuration]
   );
 
   const handleComplete = useCallback(
@@ -773,10 +730,12 @@ export default function PullupStep({ onNext }: PullupStepProps) {
         skipped: false,
       };
 
+      // Clear rest timer callback
+      setOnRestTimerFinish(null);
       setPullupInProgress(null);
       onNext(result);
     },
-    [setPullupInProgress, onNext]
+    [setPullupInProgress, setOnRestTimerFinish, onNext]
   );
 
   const handleSkip = useCallback(() => {
@@ -792,9 +751,10 @@ export default function PullupStep({ onNext }: PullupStepProps) {
       skipped: true,
     };
 
+    setOnRestTimerFinish(null);
     setPullupInProgress(null);
     onNext(result);
-  }, [setPullupInProgress, onNext]);
+  }, [setPullupInProgress, setOnRestTimerFinish, onNext]);
 
   const handleStart = useCallback(() => {
     const s = stateRef.current;
@@ -875,6 +835,7 @@ export default function PullupStep({ onNext }: PullupStepProps) {
           stateRef={stateRef as React.MutableRefObject<PullupInProgressState>}
           onUpdate={handleUpdate}
           onComplete={handleComplete}
+          onStartRest={handleStartRest}
         />
       )}
       {plan.effectiveDay === 2 && (
@@ -882,6 +843,7 @@ export default function PullupStep({ onNext }: PullupStepProps) {
           stateRef={stateRef as React.MutableRefObject<PullupInProgressState>}
           onUpdate={handleUpdate}
           onComplete={handleComplete}
+          onStartRest={handleStartRest}
         />
       )}
       {(plan.effectiveDay === 3 || plan.effectiveDay === 4) && (
@@ -889,6 +851,7 @@ export default function PullupStep({ onNext }: PullupStepProps) {
           stateRef={stateRef as React.MutableRefObject<PullupInProgressState>}
           onUpdate={handleUpdate}
           onComplete={handleComplete}
+          onStartRest={handleStartRest}
         />
       )}
     </div>

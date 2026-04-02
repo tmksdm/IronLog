@@ -3,6 +3,10 @@
 /**
  * Root component with authentication gate, routing, bottom navigation,
  * app initialization, and update checking.
+ *
+ * Auth check reads the cached Supabase token from localStorage first
+ * (instant, no network) so the app doesn't hang when the server is unreachable.
+ * onAuthStateChange handles token refresh / expiry in the background.
  */
 
 import { useEffect, useState } from 'react';
@@ -42,7 +46,6 @@ function useRedirectOnLaunch() {
   useEffect(() => {
     if (!hasLaunched) {
       hasLaunched = true;
-      // Fresh launch — clear stale navigation state and go home
       sessionStorage.clear();
       if (location.pathname !== '/') {
         navigate('/', { replace: true });
@@ -51,6 +54,22 @@ function useRedirectOnLaunch() {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 }
 
+/**
+ * Check if a Supabase session token exists in localStorage.
+ * Instant (no network). Supabase stores session under: sb-{projectRef}-auth-token
+ */
+function hasLocalSupabaseSession(): boolean {
+  try {
+    const projectRef = 'khnepdfkjwpxwtbjvqiv';
+    const key = `sb-${projectRef}-auth-token`;
+    const stored = localStorage.getItem(key);
+    if (!stored) return false;
+    const parsed = JSON.parse(stored);
+    return !!(parsed?.access_token || parsed?.currentSession?.access_token);
+  } catch {
+    return false;
+  }
+}
 
 function AppContent() {
   const { initialize, isInitialized, isLoading } = useAppStore();
@@ -69,7 +88,7 @@ function AppContent() {
   const showNav = shouldShowNav(location.pathname);
 
   return (
-    <div className="mx-auto max-w-[480px] min-h-screen">
+    <div className="mx-auto max-w-120 min-h-screen">
       <Routes>
         <Route path="/" element={<HomePage />} />
         <Route path="/workout" element={<ActiveWorkoutPage />} />
@@ -101,16 +120,31 @@ function App() {
   }, []);
 
   useEffect(() => {
-    // Check for existing session on mount
+    // FAST PATH: check localStorage for cached token (instant, no network).
+    // If token exists, show the app immediately.
+    const hasCachedSession = hasLocalSupabaseSession();
+
+    if (hasCachedSession) {
+      setIsAuthenticated(true);
+      setIsCheckingAuth(false);
+    }
+
+    // SLOW PATH: verify session via network (handles token refresh).
+    // Runs in background. If token is actually expired, onAuthStateChange
+    // will fire and set isAuthenticated to false → shows login screen.
     const checkSession = async () => {
       try {
         const { data: { session } } = await supabase.auth.getSession();
         setIsAuthenticated(!!session);
       } catch (err) {
         console.error('Failed to check auth session:', err);
-        setIsAuthenticated(false);
+        if (!hasCachedSession) {
+          setIsAuthenticated(false);
+        }
       } finally {
-        setIsCheckingAuth(false);
+        if (!hasCachedSession) {
+          setIsCheckingAuth(false);
+        }
       }
     };
 
@@ -128,12 +162,10 @@ function App() {
     };
   }, []);
 
-  // Show loading while checking for saved session
   if (isCheckingAuth) {
     return <LoadingScreen />;
   }
 
-  // Not logged in — show login page
   if (!isAuthenticated) {
     return (
       <>
@@ -143,7 +175,6 @@ function App() {
     );
   }
 
-  // Logged in — show the app
   return (
     <>
       {updateVersion && <UpdateBanner remoteVersion={updateVersion} />}

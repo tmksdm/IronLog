@@ -275,8 +275,12 @@ export async function pushToCloud(): Promise<void> {
 // ==========================================
 
 /**
- * Pull all data from Supabase and replace local SQLite.
- * Called on app startup after login.
+ * Pull data from Supabase into local SQLite.
+ *
+ * ONLY pulls if local database is empty (no exercises AND no sessions).
+ * This covers: first launch, reinstall, new device.
+ * In normal usage (same device), local data is always authoritative
+ * and cloud is just a backup populated by pushToCloud().
  */
 export async function pullFromCloud(): Promise<boolean> {
   const userId = await getUserId();
@@ -284,6 +288,21 @@ export async function pullFromCloud(): Promise<boolean> {
     console.warn('pullFromCloud: no authenticated user, skipping');
     return false;
   }
+
+  // Check if local database already has data
+  const db = await getDb();
+  const localExCount = await db.query('SELECT COUNT(*) as cnt FROM exercises');
+  const localSessionCount = await db.query('SELECT COUNT(*) as cnt FROM workout_sessions');
+  const hasLocalExercises = (localExCount.values?.[0]?.cnt ?? 0) > 0;
+  const hasLocalSessions = (localSessionCount.values?.[0]?.cnt ?? 0) > 0;
+
+  if (hasLocalExercises || hasLocalSessions) {
+    console.log('pullFromCloud: local data exists, skipping (local is authoritative)');
+    return false;
+  }
+
+  // Local is empty — pull everything from cloud (new device / reinstall)
+  console.log('pullFromCloud: local database is empty, pulling from cloud...');
 
   try {
     // Fetch all data from Supabase
@@ -307,18 +326,17 @@ export async function pullFromCloud(): Promise<boolean> {
     const cardio = cardioRes.data ?? [];
     const pullups = pullupRes.data ?? [];
 
-    // If cloud is empty, don't wipe local data
+    // If cloud is also empty, nothing to do
     if (exercises.length === 0 && sessions.length === 0) {
-      console.log('pullFromCloud: cloud is empty, keeping local data');
+      console.log('pullFromCloud: cloud is also empty, nothing to pull');
       return false;
     }
 
-    // Replace local SQLite with cloud data
-    const db = await getDb();
+    // Insert cloud data into local SQLite
     await db.execute('PRAGMA foreign_keys = OFF;');
 
     try {
-      // Clear local data
+      // Clear local data (should be empty already, but just in case)
       await db.execute('DELETE FROM active_workout_state;');
       await db.execute('DELETE FROM pullup_logs;');
       await db.execute('DELETE FROM cardio_logs;');
@@ -404,17 +422,17 @@ export async function pullFromCloud(): Promise<boolean> {
     }
 
     console.log(
-      `pullFromCloud: synced ${exercises.length} exercises, ` +
+      `pullFromCloud: restored ${exercises.length} exercises, ` +
       `${sessions.length} sessions, ${logs.length} logs, ` +
       `${cardio.length} cardio, ${pullups.length} pullups`
     );
     return true;
   } catch (error) {
     console.error('pullFromCloud error:', error);
-    // Don't throw — app should still work with local data
     return false;
   }
 }
+
 
 // ==========================================
 // DELETE helpers (for workout deletion sync)

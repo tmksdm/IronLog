@@ -5,7 +5,7 @@
  * Update this file with each release.
  */
 
-export const APP_VERSION = '0.16.2';
+export const APP_VERSION = '0.17.0';
 
 export interface ChangelogEntry {
   version: string;
@@ -14,6 +14,17 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+
+  {
+    version: '0.17.0',
+    date: '2026-04-02',
+    changes: [
+      'Мгновенный запуск: приложение грузится на локальных данных, не ждёт сервер',
+      'Облако теперь только бэкап: pull только при пустой базе (новый телефон/переустановка)',
+      'Кардио: подтверждение «Сохранено» после нажатия кнопки + возможность изменить',
+      'Подтягивания: таймер отдыха теперь глобальный — сворачивается в кружок, виден на всех вкладках',
+    ],
+  },
 
   {
     version: '0.16.2',

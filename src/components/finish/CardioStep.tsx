@@ -1,11 +1,13 @@
 // src/components/finish/CardioStep.tsx
 
 /**
- * Step 1 of FinishWorkoutModal.
- * Cardio input: jump rope (countdown timer + count) or treadmill 3km (time + run program).
+ * Cardio input tab in post-workout flow.
+ * Jump rope (countdown timer + count) or treadmill 3km (time + run program).
+ *
+ * After saving, shows a "Saved" confirmation view (green checkmark).
  *
  * NOTE: Run program progression is NOT applied here.
- * It is deferred to FinishWorkoutModal.handleFinish() so that
+ * It is deferred to ActiveWorkoutPage.handleFinalSave() so that
  * deleting a test workout doesn't leave stale progression in localStorage.
  */
 
@@ -18,10 +20,53 @@ import {
   saveRunningProgram,
   type RunningProgramState,
 } from '../../utils/runningProgram';
-import { Play, Square, Timer, Check, X, Settings2 } from 'lucide-react';
+import { formatTimeMMSS } from '../../utils/format';
+import { Play, Square, Timer, Check, X, Settings2, Pencil } from 'lucide-react';
 
 interface CardioStepProps {
   onNext: () => void;
+}
+
+// ---- Saved Confirmation View ----
+
+function SavedView({
+  type,
+  onEdit,
+}: {
+  type: 'jump_rope' | 'treadmill_3km';
+  onEdit: () => void;
+}) {
+  const jumpRopeCount = useWorkoutStore((s) => s.jumpRopeCount);
+  const treadmillSeconds = useWorkoutStore((s) => s.treadmillSeconds);
+  const treadmillSucceeded = useWorkoutStore((s) => s.treadmillSucceeded);
+
+  const summaryText =
+    type === 'jump_rope'
+      ? `Скакалка: ${jumpRopeCount ?? 0} прыжков`
+      : `Бег 3 км: ${formatTimeMMSS(treadmillSeconds ?? 0)}${
+          treadmillSucceeded === true
+            ? ' — справился'
+            : treadmillSucceeded === false
+              ? ' — не справился'
+              : ''
+        }`;
+
+  return (
+    <div className="flex flex-col items-center gap-4 py-8 px-4">
+      <div className="w-16 h-16 rounded-full bg-[#4CAF50]/20 flex items-center justify-center">
+        <Check size={32} className="text-[#4CAF50]" />
+      </div>
+      <p className="text-lg font-semibold text-white">Кардио сохранено</p>
+      <p className="text-sm text-[#B0B0B0] text-center">{summaryText}</p>
+      <button
+        onClick={onEdit}
+        className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#2A2A2A] text-[#B0B0B0] text-sm font-semibold active:bg-[#333333] transition-colors"
+      >
+        <Pencil size={16} />
+        Изменить
+      </button>
+    </div>
+  );
 }
 
 // ---- Jump Rope Input ----
@@ -29,7 +74,14 @@ interface CardioStepProps {
 function JumpRopeInput({ onNext }: { onNext: () => void }) {
   const saveJumpRope = useWorkoutStore((s) => s.saveJumpRope);
   const jumpRopeCount = useWorkoutStore((s) => s.jumpRopeCount);
+  const isCardioCompleted = useWorkoutStore((s) => s.isCardioCompleted);
+  const cardioType = useWorkoutStore((s) => s.cardioType);
   const [count, setCount] = useState<number>(jumpRopeCount ?? 0);
+
+  // If already saved, show confirmation
+  const [showSaved, setShowSaved] = useState(
+    isCardioCompleted && cardioType === 'jump_rope'
+  );
 
   // Countdown timer: 1 min 15 sec = 75 seconds
   const DURATION = 75;
@@ -87,8 +139,20 @@ function JumpRopeInput({ onNext }: { onNext: () => void }) {
 
   const handleSave = () => {
     saveJumpRope(count);
-    onNext();
+    setShowSaved(true);
   };
+
+  if (showSaved) {
+    return (
+      <SavedView
+        type="jump_rope"
+        onEdit={() => {
+          setCount(jumpRopeCount ?? 0);
+          setShowSaved(false);
+        }}
+      />
+    );
+  }
 
   // SVG ring for countdown (matches RestTimer expanded size)
   const RING_SIZE = 240;
@@ -209,6 +273,8 @@ function TreadmillInput({ onNext }: { onNext: () => void }) {
   const saveTreadmill = useWorkoutStore((s) => s.saveTreadmill);
   const treadmillSeconds = useWorkoutStore((s) => s.treadmillSeconds);
   const treadmillSucceeded = useWorkoutStore((s) => s.treadmillSucceeded);
+  const isCardioCompleted = useWorkoutStore((s) => s.isCardioCompleted);
+  const cardioType = useWorkoutStore((s) => s.cardioType);
 
   const initialMin = treadmillSeconds ? Math.floor(treadmillSeconds / 60) : 0;
   const initialSec = treadmillSeconds ? treadmillSeconds % 60 : 0;
@@ -222,6 +288,11 @@ function TreadmillInput({ onNext }: { onNext: () => void }) {
   const [isEditing, setIsEditing] = useState(false);
   const [editSpeed, setEditSpeed] = useState('');
 
+  // If already saved, show confirmation
+  const [showSaved, setShowSaved] = useState(
+    isCardioCompleted && cardioType === 'treadmill_3km'
+  );
+
   const totalSeconds = minutes * 60 + seconds;
 
   // Handle result toggle
@@ -231,9 +302,9 @@ function TreadmillInput({ onNext }: { onNext: () => void }) {
 
   const handleSave = () => {
     // Just save time + result to the store.
-    // Run program progression is applied later in FinishWorkoutModal.handleFinish().
+    // Run program progression is applied later in ActiveWorkoutPage.handleFinalSave().
     saveTreadmill(totalSeconds, succeeded);
-    onNext();
+    setShowSaved(true);
   };
 
   // Initialize program with a starting speed
@@ -278,6 +349,20 @@ function TreadmillInput({ onNext }: { onNext: () => void }) {
     setIsEditing(false);
     setEditSpeed('');
   };
+
+  if (showSaved) {
+    return (
+      <SavedView
+        type="treadmill_3km"
+        onEdit={() => {
+          setMinutes(treadmillSeconds ? Math.floor(treadmillSeconds / 60) : 0);
+          setSeconds(treadmillSeconds ? treadmillSeconds % 60 : 0);
+          setSucceeded(treadmillSucceeded ?? null);
+          setShowSaved(false);
+        }}
+      />
+    );
+  }
 
   return (
     <div className="flex flex-col items-center gap-5 px-4 pt-4">
