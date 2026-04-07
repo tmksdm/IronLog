@@ -11,6 +11,11 @@
  * NOTE: Pull-up program progression is NOT applied here.
  * It is deferred to ActiveWorkoutPage.handleFinalSave() so that
  * deleting a test workout doesn't leave stale progression in localStorage.
+ *
+ * FIX (v0.17.3): Day34Grips now advances currentSetIndex immediately when
+ * recording a set (in handleSuccess/handleFail), not after rest timer finishes.
+ * This prevents infinite loop when rest timer is dismissed early.
+ * Rest timer finish callback for days 3/4 now only clears isResting flag.
  */
 
 import { useEffect, useCallback, useRef } from 'react';
@@ -71,9 +76,8 @@ function RestingIndicator({ state }: { state: PullupInProgressState }) {
 
   // Show a simple indicator — the actual timer is the global RestTimer
   // (expanded or collapsed bubble). This just tells the user what's happening.
-  const sets = state.completedSets;
   const total = state.plan.plannedSets ?? 5;
-  const doneSets = sets.length;
+  const doneSets = state.completedSets.length;
 
   return (
     <div className="flex flex-col items-center gap-3 py-4">
@@ -414,6 +418,8 @@ function Day34Grips({
   const target = state.plan.targetReps ?? 4;
 
   const sets = state.completedSets;
+  // FIX: use completedSets.length as current set index for display
+  // currentSetIndex is now always synced with completedSets.length
   const currentSet = state.currentSetIndex;
   const currentGrip = grips[currentSet] ?? 'normal';
   const isTimerRunning = useWorkoutStore((s) => s.isRestTimerRunning);
@@ -425,6 +431,9 @@ function Day34Grips({
     const t = s.plan.targetReps ?? 4;
     const total = s.plan.plannedSets ?? 9;
 
+    // FIX: guard against duplicate — if completedSets already has this index, skip
+    if (s.completedSets.length > idx) return;
+
     const result = {
       setNumber: idx + 1,
       reps: t,
@@ -435,12 +444,15 @@ function Day34Grips({
 
     const newSets = [...s.completedSets, result];
 
-    if (idx + 1 >= total) {
+    if (newSets.length >= total) {
+      // All sets done — complete immediately, no rest needed
       onComplete(newSets);
     } else {
+      // FIX: advance currentSetIndex immediately along with recording the set
       const restSec = s.plan.restSeconds ?? 60;
       onUpdate({
         completedSets: newSets,
+        currentSetIndex: idx + 1,
         isResting: true,
         restSecondsLeft: restSec,
         restSecondsTotal: restSec,
@@ -456,6 +468,9 @@ function Day34Grips({
     const t = s.plan.targetReps ?? 4;
     const total = s.plan.plannedSets ?? 9;
 
+    // FIX: guard against duplicate — if completedSets already has this index, skip
+    if (s.completedSets.length > idx) return;
+
     const result = {
       setNumber: idx + 1,
       reps: 0,
@@ -466,12 +481,15 @@ function Day34Grips({
 
     const newSets = [...s.completedSets, result];
 
-    if (idx + 1 >= total) {
+    if (newSets.length >= total) {
+      // All sets done — complete immediately, no rest needed
       onComplete(newSets);
     } else {
+      // FIX: advance currentSetIndex immediately along with recording the set
       const restSec = s.plan.restSeconds ?? 60;
       onUpdate({
         completedSets: newSets,
+        currentSetIndex: idx + 1,
         isResting: true,
         restSecondsLeft: restSec,
         restSecondsTotal: restSec,
@@ -674,12 +692,12 @@ export default function PullupStep({ onNext }: PullupStepProps) {
           restSecondsTotal: 0,
         });
       } else if (s.plan.effectiveDay === 3 || s.plan.effectiveDay === 4) {
-        // Grip days: advance to next set
+        // FIX: Days 3/4 — currentSetIndex was already advanced in handleSuccess/handleFail.
+        // Just clear the resting flag.
         updatePullupInProgress({
           isResting: false,
           restSecondsLeft: 0,
           restSecondsTotal: 0,
-          currentSetIndex: s.currentSetIndex + 1,
         });
       } else {
         // Day 1: just clear rest
@@ -698,6 +716,38 @@ export default function PullupStep({ onNext }: PullupStepProps) {
       setOnRestTimerFinish(null);
     };
   }, [pullupInProgress?.isResting, pullupInProgress?.plan.effectiveDay, pullupInProgress?.ladderFinalSet, updatePullupInProgress, setOnRestTimerFinish]);
+
+  // FIX: Watch for rest timer being dismissed early (user tapped "Закрыть" on RestTimer).
+  // When isRestTimerRunning goes false while pullupInProgress.isResting is still true,
+  // we need to clear isResting so the next set becomes actionable.
+  const isTimerRunning = useWorkoutStore((s) => s.isRestTimerRunning);
+  const prevTimerRunning = useRef(isTimerRunning);
+
+  useEffect(() => {
+    const wasRunning = prevTimerRunning.current;
+    prevTimerRunning.current = isTimerRunning;
+
+    // Timer was running, now it's not, but pullup thinks we're still resting
+    if (wasRunning && !isTimerRunning && pullupInProgress?.isResting) {
+      // For Day 2 (ladder), we still need to advance currentSetIndex on rest end
+      if (pullupInProgress.plan.effectiveDay === 2 && !pullupInProgress.ladderFinalSet) {
+        updatePullupInProgress({
+          isResting: false,
+          restSecondsLeft: 0,
+          restSecondsTotal: 0,
+          currentSetIndex: (pullupInProgress.currentSetIndex || 1) + 1,
+        });
+      } else {
+        // Days 1, 3, 4 (and ladder finalSet): just clear rest flag
+        // For days 3/4 currentSetIndex was already advanced
+        updatePullupInProgress({
+          isResting: false,
+          restSecondsLeft: 0,
+          restSecondsTotal: 0,
+        });
+      }
+    }
+  }, [isTimerRunning, pullupInProgress?.isResting, pullupInProgress?.plan.effectiveDay, pullupInProgress?.ladderFinalSet, pullupInProgress?.currentSetIndex, updatePullupInProgress]);
 
   // Stable callbacks that read from stateRef
   const handleUpdate = useCallback(

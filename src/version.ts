@@ -5,7 +5,7 @@
  * Update this file with each release.
  */
 
-export const APP_VERSION = '0.17.2';
+export const APP_VERSION = '0.17.3';
 
 export interface ChangelogEntry {
   version: string;
@@ -14,6 +14,14 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+
+  {
+    version: '0.17.3',
+    date: '2026-04-07',
+    changes: [
+      'Исправлено: подтягивания (три/четыре хвата) зацикливались при досрочном закрытии таймера отдыха — подходы множились бесконечно',
+    ],
+  },
 
   {
     version: '0.17.2',
