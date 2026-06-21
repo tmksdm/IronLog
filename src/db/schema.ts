@@ -62,12 +62,15 @@ export const CREATE_TABLES_SQL = `
 
   CREATE TABLE IF NOT EXISTS cardio_logs (
     id TEXT PRIMARY KEY,
-    workout_session_id TEXT NOT NULL,
+    workout_session_id TEXT,
+    date TEXT,
     type TEXT NOT NULL CHECK (type IN ('jump_rope', 'treadmill_3km')),
     duration_seconds INTEGER,
     count INTEGER,
+    succeeded INTEGER,
     FOREIGN KEY (workout_session_id) REFERENCES workout_sessions(id)
   );
+
 
   CREATE TABLE IF NOT EXISTS active_workout_state (
     id INTEGER PRIMARY KEY CHECK (id = 1),
@@ -78,7 +81,8 @@ export const CREATE_TABLES_SQL = `
 
   CREATE TABLE IF NOT EXISTS pullup_logs (
     id TEXT PRIMARY KEY,
-    workout_session_id TEXT NOT NULL,
+    workout_session_id TEXT,
+    date TEXT,
     pullup_day INTEGER NOT NULL,
     effective_day INTEGER NOT NULL,
     set_number INTEGER NOT NULL,
@@ -89,7 +93,8 @@ export const CREATE_TABLES_SQL = `
     total_reps INTEGER NOT NULL DEFAULT 0,
     skipped INTEGER NOT NULL DEFAULT 0,
     FOREIGN KEY (workout_session_id) REFERENCES workout_sessions(id)
-  );  
+  );
+
 
   CREATE INDEX IF NOT EXISTS idx_exercises_day_type
     ON exercises(day_type_id);
@@ -105,6 +110,10 @@ export const CREATE_TABLES_SQL = `
     ON cardio_logs(workout_session_id);
   CREATE INDEX IF NOT EXISTS idx_pullup_logs_session
     ON pullup_logs(workout_session_id);    
+  CREATE INDEX IF NOT EXISTS idx_cardio_logs_date
+    ON cardio_logs(date);
+  CREATE INDEX IF NOT EXISTS idx_pullup_logs_date
+    ON pullup_logs(date);
 `;
 
 export const SEED_DAY_TYPES_SQL = `

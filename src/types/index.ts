@@ -75,12 +75,14 @@ export type CardioType = 'jump_rope' | 'treadmill_3km';
 
 export interface CardioLog {
   id: string;
-  workoutSessionId: string;
+  workoutSessionId: string | null;
+  date?: string;
   type: CardioType;
   durationSeconds: number | null;
   count: number | null;
   succeeded: boolean | null;
 }
+
 
 // --- UI helper types ---
 
@@ -232,7 +234,7 @@ export interface BackupData {
 
 export interface PullupLog {
   id: string;
-  workoutSessionId: string;
+  workoutSessionId: string | null;
   pullupDay: number;        // 1‑5
   effectiveDay: number;     // 1‑4 (resolved from day 5)
   setNumber: number;

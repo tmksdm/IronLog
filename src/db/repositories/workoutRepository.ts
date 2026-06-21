@@ -409,23 +409,27 @@ export async function wasExerciseSkippedLastSession(
 
 /**
  * Create a cardio log entry.
+ * `date` defaults to now if not provided (standalone entries will pass it explicitly later).
  */
 export async function createCardioLog(data: {
-  workoutSessionId: string;
+  workoutSessionId: string | null;
   type: CardioType;
   durationSeconds: number | null;
   count: number | null;
   succeeded: boolean | null;
+  date?: string;
 }): Promise<CardioLog> {
   const db = await getDb();
   const id = generateId();
+  const date = data.date ?? new Date().toISOString();
 
   await db.run(
-    `INSERT INTO cardio_logs (id, workout_session_id, type, duration_seconds, count, succeeded)
-     VALUES (?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO cardio_logs (id, workout_session_id, date, type, duration_seconds, count, succeeded)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
     [
       id,
       data.workoutSessionId,
+      date,
       data.type,
       data.durationSeconds,
       data.count,
@@ -434,8 +438,16 @@ export async function createCardioLog(data: {
   );
 
   await saveToStore();
-  return { id, ...data };
+  return {
+    id,
+    workoutSessionId: data.workoutSessionId,
+    type: data.type,
+    durationSeconds: data.durationSeconds,
+    count: data.count,
+    succeeded: data.succeeded,
+  };
 }
+
 
 /**
  * Get cardio logs for a session.

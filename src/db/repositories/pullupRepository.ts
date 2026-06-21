@@ -29,38 +29,42 @@ function mapPullupRow(row: any): PullupLog {
 /**
  * Save all pull-up sets for a workout session.
  * If skipped, saves a single row with skipped=1.
+ * `date` defaults to now (standalone entries will pass it explicitly later).
  */
 export async function savePullupSession(data: {
-  workoutSessionId: string;
+  workoutSessionId: string | null;
   pullupDay: PullupDayNumber;
   effectiveDay: 1 | 2 | 3 | 4;
   sets: PullupSetResult[];
   totalReps: number;
   skipped: boolean;
+  date?: string;
 }): Promise<void> {
   const db = await getDb();
+  const date = data.date ?? new Date().toISOString();
 
   if (data.skipped) {
     // Save a single skip marker row
     const id = generateId();
     await db.run(
       `INSERT INTO pullup_logs
-        (id, workout_session_id, pullup_day, effective_day, set_number, reps,
+        (id, workout_session_id, date, pullup_day, effective_day, set_number, reps,
          grip_type, target_reps, succeeded, total_reps, skipped)
-       VALUES (?, ?, ?, ?, 1, 0, NULL, NULL, 0, 0, 1)`,
-      [id, data.workoutSessionId, data.pullupDay, data.effectiveDay]
+       VALUES (?, ?, ?, ?, ?, 1, 0, NULL, NULL, 0, 0, 1)`,
+      [id, data.workoutSessionId, date, data.pullupDay, data.effectiveDay]
     );
   } else {
     for (const set of data.sets) {
       const id = generateId();
       await db.run(
         `INSERT INTO pullup_logs
-          (id, workout_session_id, pullup_day, effective_day, set_number, reps,
+          (id, workout_session_id, date, pullup_day, effective_day, set_number, reps,
            grip_type, target_reps, succeeded, total_reps, skipped)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)`,
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)`,
         [
           id,
           data.workoutSessionId,
+          date,
           data.pullupDay,
           data.effectiveDay,
           set.setNumber,
@@ -77,6 +81,7 @@ export async function savePullupSession(data: {
 
   await saveToStore();
 }
+
 
 // ---- Read ----
 
@@ -150,13 +155,12 @@ export async function getMonthlyPullups(): Promise<MonthlyPullups[]> {
   const db = await getDb();
   const result = await db.query(
     `SELECT
-       CAST(strftime('%Y', ws.date, 'localtime') AS INTEGER) as year,
-       CAST(strftime('%m', ws.date, 'localtime') AS INTEGER) as month,
-       SUM(pl.reps) as total_reps,
-       COUNT(DISTINCT pl.workout_session_id) as session_count
-     FROM pullup_logs pl
-     JOIN workout_sessions ws ON pl.workout_session_id = ws.id
-     WHERE pl.skipped = 0
+       CAST(strftime('%Y', date, 'localtime') AS INTEGER) as year,
+       CAST(strftime('%m', date, 'localtime') AS INTEGER) as month,
+       SUM(reps) as total_reps,
+       COUNT(DISTINCT COALESCE(workout_session_id, id)) as session_count
+     FROM pullup_logs
+     WHERE skipped = 0 AND date IS NOT NULL
      GROUP BY year, month
      ORDER BY year ASC, month ASC`
   );
@@ -170,6 +174,7 @@ export async function getMonthlyPullups(): Promise<MonthlyPullups[]> {
   }));
 }
 
+
 /**
  * Get yearly total pull-up reps.
  * Uses 'localtime' modifier to group by device-local year, not UTC.
@@ -178,12 +183,11 @@ export async function getYearlyPullups(): Promise<YearlyPullups[]> {
   const db = await getDb();
   const result = await db.query(
     `SELECT
-       CAST(strftime('%Y', ws.date, 'localtime') AS INTEGER) as year,
-       SUM(pl.reps) as total_reps,
-       COUNT(DISTINCT pl.workout_session_id) as session_count
-     FROM pullup_logs pl
-     JOIN workout_sessions ws ON pl.workout_session_id = ws.id
-     WHERE pl.skipped = 0
+       CAST(strftime('%Y', date, 'localtime') AS INTEGER) as year,
+       SUM(reps) as total_reps,
+       COUNT(DISTINCT COALESCE(workout_session_id, id)) as session_count
+     FROM pullup_logs
+     WHERE skipped = 0 AND date IS NOT NULL
      GROUP BY year
      ORDER BY year ASC`
   );
@@ -194,3 +198,4 @@ export async function getYearlyPullups(): Promise<YearlyPullups[]> {
     sessionCount: row.session_count ?? 0,
   }));
 }
+

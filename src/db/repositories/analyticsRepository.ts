@@ -303,15 +303,15 @@ export async function getMonthlyRunTime(): Promise<MonthlyRunTime[]> {
   const db = await getDb();
   const result = await db.query(
     `SELECT
-       CAST(strftime('%Y', ws.date, 'localtime') AS INTEGER) as year,
-       CAST(strftime('%m', ws.date, 'localtime') AS INTEGER) as month,
-       AVG(cl.duration_seconds) as avg_duration_sec,
+       CAST(strftime('%Y', date, 'localtime') AS INTEGER) as year,
+       CAST(strftime('%m', date, 'localtime') AS INTEGER) as month,
+       AVG(duration_seconds) as avg_duration_sec,
        COUNT(*) as run_count
-     FROM cardio_logs cl
-     JOIN workout_sessions ws ON cl.workout_session_id = ws.id
-     WHERE cl.type = 'treadmill_3km'
-       AND cl.duration_seconds IS NOT NULL
-       AND cl.duration_seconds > 0
+     FROM cardio_logs
+     WHERE type = 'treadmill_3km'
+       AND duration_seconds IS NOT NULL
+       AND duration_seconds > 0
+       AND date IS NOT NULL
      GROUP BY year, month
      ORDER BY year ASC, month ASC`
   );
@@ -325,6 +325,7 @@ export async function getMonthlyRunTime(): Promise<MonthlyRunTime[]> {
   }));
 }
 
+
 export async function getYearlyRunTime(): Promise<YearlyRunTime[]> {
   const db = await getDb();
   const result = await db.query(
@@ -334,15 +335,15 @@ export async function getYearlyRunTime(): Promise<YearlyRunTime[]> {
        SUM(cnt) as run_count
      FROM (
        SELECT
-         CAST(strftime('%Y', ws.date, 'localtime') AS INTEGER) as year,
-         CAST(strftime('%m', ws.date, 'localtime') AS INTEGER) as month,
-         AVG(cl.duration_seconds) as monthly_avg,
+         CAST(strftime('%Y', date, 'localtime') AS INTEGER) as year,
+         CAST(strftime('%m', date, 'localtime') AS INTEGER) as month,
+         AVG(duration_seconds) as monthly_avg,
          COUNT(*) as cnt
-       FROM cardio_logs cl
-       JOIN workout_sessions ws ON cl.workout_session_id = ws.id
-       WHERE cl.type = 'treadmill_3km'
-         AND cl.duration_seconds IS NOT NULL
-         AND cl.duration_seconds > 0
+       FROM cardio_logs
+       WHERE type = 'treadmill_3km'
+         AND duration_seconds IS NOT NULL
+         AND duration_seconds > 0
+         AND date IS NOT NULL
        GROUP BY year, month
      )
      GROUP BY year
@@ -355,6 +356,7 @@ export async function getYearlyRunTime(): Promise<YearlyRunTime[]> {
     runCount: row.run_count,
   }));
 }
+
 
 // ==========================================
 // Per-exercise progress

@@ -5,7 +5,7 @@
  * Update this file with each release.
  */
 
-export const APP_VERSION = '0.17.4';
+export const APP_VERSION = '0.18.0';
 
 export interface ChangelogEntry {
   version: string;
@@ -14,6 +14,17 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+
+  {
+    version: '0.18.0',
+    date: '2026-06-21',
+    changes: [
+      'Рефакторинг (Этап 1): подготовка к независимым активностям «Бег» и «Турник».',
+      'Схема БД: cardio_logs и pullup_logs теперь имеют собственную колонку date,  а привязка к тренировке (workout_session_id) стала необязательной',
+      'Идемпотентная миграция с переносом и заполнением даты из связанных тренировок для существующих записей',
+      'Аналитика бега и подтягиваний переведена на собственную колонку date (вместо JOIN с датой тренировки). Поведение для текущих данных не меняется',
+    ],
+  },
 
   {
     version: '0.17.4',

@@ -37,25 +37,39 @@ async function initWeb(): Promise<void> {
   await sqlite.initWebStore();
 }
 
+/**
+ * Check whether a table has a given column.
+ */
+async function tableHasColumn(
+  connection: SQLiteDBConnection,
+  table: string,
+  column: string
+): Promise<boolean> {
+  const info = await connection.query(`PRAGMA table_info('${table}')`);
+  const columns = (info.values ?? []) as Array<{ name: string }>;
+  return columns.some((col) => col.name === column);
+}
 
 /**
  * Run schema migrations safely. Each migration checks if already applied.
  */
 async function runMigrations(connection: SQLiteDBConnection): Promise<void> {
   try {
-    // v0.12.0: Add 'succeeded' column to cardio_logs
-    const tableInfo = await connection.query("PRAGMA table_info('cardio_logs')");
-    const columns = (tableInfo.values ?? []) as Array<{ name: string }>;
-    const hasSucceeded = columns.some((col) => col.name === 'succeeded');
-
-    if (!hasSucceeded) {
+    // v0.12.0: Add 'succeeded' column to cardio_logs (only relevant for very old DBs;
+    // the cardio_logs rebuild below also guarantees this column exists).
+    const cardioHasSucceeded = await tableHasColumn(
+      connection,
+      'cardio_logs',
+      'succeeded'
+    );
+    if (!cardioHasSucceeded) {
       await connection.execute(
         'ALTER TABLE cardio_logs ADD COLUMN succeeded INTEGER;'
       );
       console.log('Migration: added succeeded column to cardio_logs');
     }
 
-    // v0.13.0: Add pullup_logs table
+    // v0.13.0: Add pullup_logs table (for DBs created before pull-ups existed).
     const pullupTableCheck = await connection.query(
       "SELECT name FROM sqlite_master WHERE type='table' AND name='pullup_logs'"
     );
@@ -65,7 +79,8 @@ async function runMigrations(connection: SQLiteDBConnection): Promise<void> {
       await connection.execute(`
         CREATE TABLE IF NOT EXISTS pullup_logs (
           id TEXT PRIMARY KEY,
-          workout_session_id TEXT NOT NULL,
+          workout_session_id TEXT,
+          date TEXT,
           pullup_day INTEGER NOT NULL,
           effective_day INTEGER NOT NULL,
           set_number INTEGER NOT NULL,
@@ -81,6 +96,105 @@ async function runMigrations(connection: SQLiteDBConnection): Promise<void> {
           ON pullup_logs(workout_session_id);
       `);
       console.log('Migration: created pullup_logs table');
+    }
+
+    // v0.18.0 (Standalone refactor, Phase 1):
+    // Make workout_session_id nullable + add own 'date' column on cardio_logs.
+    // SQLite cannot drop NOT NULL / change FK via ALTER, so we rebuild the table.
+    // Detected by absence of the 'date' column (idempotent).
+    const cardioHasDate = await tableHasColumn(connection, 'cardio_logs', 'date');
+    if (!cardioHasDate) {
+      await connection.execute('PRAGMA foreign_keys = OFF;');
+      await connection.execute(`
+        CREATE TABLE cardio_logs_new (
+          id TEXT PRIMARY KEY,
+          workout_session_id TEXT,
+          date TEXT,
+          type TEXT NOT NULL CHECK (type IN ('jump_rope', 'treadmill_3km')),
+          duration_seconds INTEGER,
+          count INTEGER,
+          succeeded INTEGER,
+          FOREIGN KEY (workout_session_id) REFERENCES workout_sessions(id)
+        );
+
+        -- Copy data, backfilling date from the joined workout session.
+        INSERT INTO cardio_logs_new
+          (id, workout_session_id, date, type, duration_seconds, count, succeeded)
+        SELECT
+          cl.id,
+          cl.workout_session_id,
+          ws.date,
+          cl.type,
+          cl.duration_seconds,
+          cl.count,
+          cl.succeeded
+        FROM cardio_logs cl
+        LEFT JOIN workout_sessions ws ON cl.workout_session_id = ws.id;
+
+        DROP TABLE cardio_logs;
+        ALTER TABLE cardio_logs_new RENAME TO cardio_logs;
+
+        CREATE INDEX IF NOT EXISTS idx_cardio_logs_session
+          ON cardio_logs(workout_session_id);
+        CREATE INDEX IF NOT EXISTS idx_cardio_logs_date
+          ON cardio_logs(date);
+      `);
+      await connection.execute('PRAGMA foreign_keys = ON;');
+      console.log('Migration: rebuilt cardio_logs (nullable FK + date, backfilled)');
+    }
+
+    // v0.18.0 (Standalone refactor, Phase 1):
+    // Make workout_session_id nullable + add own 'date' column on pullup_logs.
+    const pullupHasDate = await tableHasColumn(connection, 'pullup_logs', 'date');
+    if (!pullupHasDate) {
+      await connection.execute('PRAGMA foreign_keys = OFF;');
+      await connection.execute(`
+        CREATE TABLE pullup_logs_new (
+          id TEXT PRIMARY KEY,
+          workout_session_id TEXT,
+          date TEXT,
+          pullup_day INTEGER NOT NULL,
+          effective_day INTEGER NOT NULL,
+          set_number INTEGER NOT NULL,
+          reps INTEGER NOT NULL DEFAULT 0,
+          grip_type TEXT,
+          target_reps INTEGER,
+          succeeded INTEGER NOT NULL DEFAULT 0,
+          total_reps INTEGER NOT NULL DEFAULT 0,
+          skipped INTEGER NOT NULL DEFAULT 0,
+          FOREIGN KEY (workout_session_id) REFERENCES workout_sessions(id)
+        );
+
+        -- Copy data, backfilling date from the joined workout session.
+        INSERT INTO pullup_logs_new
+          (id, workout_session_id, date, pullup_day, effective_day, set_number,
+           reps, grip_type, target_reps, succeeded, total_reps, skipped)
+        SELECT
+          pl.id,
+          pl.workout_session_id,
+          ws.date,
+          pl.pullup_day,
+          pl.effective_day,
+          pl.set_number,
+          pl.reps,
+          pl.grip_type,
+          pl.target_reps,
+          pl.succeeded,
+          pl.total_reps,
+          pl.skipped
+        FROM pullup_logs pl
+        LEFT JOIN workout_sessions ws ON pl.workout_session_id = ws.id;
+
+        DROP TABLE pullup_logs;
+        ALTER TABLE pullup_logs_new RENAME TO pullup_logs;
+
+        CREATE INDEX IF NOT EXISTS idx_pullup_logs_session
+          ON pullup_logs(workout_session_id);
+        CREATE INDEX IF NOT EXISTS idx_pullup_logs_date
+          ON pullup_logs(date);
+      `);
+      await connection.execute('PRAGMA foreign_keys = ON;');
+      console.log('Migration: rebuilt pullup_logs (nullable FK + date, backfilled)');
     }
   } catch (error) {
     console.error('Migration error:', error);
@@ -134,7 +248,7 @@ async function openAndInit(): Promise<SQLiteDBConnection> {
   }
 
   // Run schema migrations (idempotent)
-  await runMigrations(connection);  
+  await runMigrations(connection);
 
   console.log('Database initialized successfully');
   return connection;
