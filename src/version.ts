@@ -5,7 +5,7 @@
  * Update this file with each release.
  */
 
-export const APP_VERSION = '0.18.5';
+export const APP_VERSION = '0.19.0';
 
 export interface ChangelogEntry {
   version: string;
@@ -15,7 +15,19 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
 
-    {
+
+  {
+    version: '0.19.0',
+    date: '2026-06-21',
+    changes: [
+      'Этап 2: отдельный экран «Бег» — запускается с главного экрана, не привязан к тренировке',
+      'Бег пишется как самостоятельная запись (своя дата), прогрессия программы бега применяется при сохранении',
+      'Кнопки «Турник» и «Бег» на главном экране под кнопкой «Начать тренировку» (Турник появится позже)',
+    ],
+  },
+
+
+  {
     version: '0.18.5',
     date: '2026-06-21',
     changes: [

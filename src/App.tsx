@@ -24,10 +24,11 @@ import { WorkoutDetailPage } from './pages/WorkoutDetailPage';
 import { AnalyticsPage } from './pages/AnalyticsPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { ExerciseEditorPage } from './pages/ExerciseEditorPage';
+import { RunningPage } from './pages/RunningPage';
 import { startUpdateChecker } from './utils/updateChecker';
 
 /** Pages where the bottom nav should be hidden */
-const HIDDEN_NAV_PATHS = ['/workout', '/summary'];
+const HIDDEN_NAV_PATHS = ['/workout', '/summary', '/running', '/pullups'];
 
 function shouldShowNav(pathname: string): boolean {
   return !HIDDEN_NAV_PATHS.some((p) => pathname.startsWith(p));
@@ -98,6 +99,7 @@ function AppContent() {
         <Route path="/analytics" element={<AnalyticsPage />} />
         <Route path="/settings" element={<SettingsPage />} />
         <Route path="/exercises" element={<ExerciseEditorPage />} />
+        <Route path="/running" element={<RunningPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
 
