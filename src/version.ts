@@ -5,7 +5,7 @@
  * Update this file with each release.
  */
 
-export const APP_VERSION = '0.18.4';
+export const APP_VERSION = '0.18.5';
 
 export interface ChangelogEntry {
   version: string;
@@ -15,6 +15,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
 
+    {
+    version: '0.18.5',
+    date: '2026-06-21',
+    changes: [
+      'fix(sync): pullFromCloud заполняет date у cardio/pullup',
+    ],
+  },   
 
   {
     version: '0.18.4',

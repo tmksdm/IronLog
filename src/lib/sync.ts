@@ -384,6 +384,15 @@ export async function pullFromCloud(): Promise<boolean> {
         );
       }
 
+      // Build lookup: session id -> date, to backfill the 'date' column
+      // on cardio/pullup logs (v0.18.0+). Cloud rows may not carry 'date'.
+      const sessionDateById = new Map<string, string>();
+      for (const s of sessions as any[]) {
+        if (s.id) sessionDateById.set(String(s.id), String(s.date ?? s.time_start ?? ''));
+      }
+
+
+
       // Insert exercise logs
       for (const l of logs) {
         await db.run(
@@ -400,23 +409,35 @@ export async function pullFromCloud(): Promise<boolean> {
 
       // Insert cardio logs
       for (const c of cardio) {
+        const cardioDate =
+          (c as any).date ?? sessionDateById.get(String(c.workout_session_id)) ?? null;
         await db.run(
           `INSERT INTO cardio_logs
-            (id, workout_session_id, type, duration_seconds, count, succeeded)
-           VALUES (?, ?, ?, ?, ?, ?)`,
-          [c.id, c.workout_session_id, c.type, c.duration_seconds, c.count, (c as any).succeeded ?? null]
+            (id, workout_session_id, date, type, duration_seconds, count, succeeded)
+           VALUES (?, ?, ?, ?, ?, ?, ?)`,
+          [
+            c.id,
+            c.workout_session_id,
+            cardioDate,
+            c.type,
+            c.duration_seconds,
+            c.count,
+            (c as any).succeeded ?? null,
+          ]
         );
       }
 
       // Insert pullup logs
       for (const p of pullups) {
+        const pullupDate =
+          (p as any).date ?? sessionDateById.get(String(p.workout_session_id)) ?? null;
         await db.run(
           `INSERT INTO pullup_logs
-            (id, workout_session_id, pullup_day, effective_day, set_number, reps,
+            (id, workout_session_id, date, pullup_day, effective_day, set_number, reps,
              grip_type, target_reps, succeeded, total_reps, skipped)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
-            p.id, p.workout_session_id, p.pullup_day, p.effective_day,
+            p.id, p.workout_session_id, pullupDate, p.pullup_day, p.effective_day,
             p.set_number, p.reps, p.grip_type ?? null, p.target_reps ?? null,
             p.succeeded, p.total_reps, p.skipped,
           ]
