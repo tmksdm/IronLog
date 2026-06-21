@@ -229,16 +229,30 @@ export async function restoreFromBackup(data: BackupData): Promise<void> {
       );
     }
 
+    // Build a lookup: workout_session_id -> session date.
+    // Used to backfill the new 'date' column on cardio/pullup logs (v0.18.0+).
+    const sessionDateById = new Map<string, string>();
+    for (const s of data.workoutSessions as any[]) {
+      if (s.id) {
+        sessionDateById.set(String(s.id), String(s.date ?? s.time_start ?? ''));
+      }
+    }
+
+
+
     // 5. Insert cardio logs
     if (data.cardioLogs && data.cardioLogs.length > 0) {
       for (const c of data.cardioLogs) {
+        const cardioDate =
+          (c as any).date ?? sessionDateById.get(String(c.workout_session_id)) ?? null;
         await db.run(
           `INSERT INTO cardio_logs
-            (id, workout_session_id, type, duration_seconds, count, succeeded)
-           VALUES (?, ?, ?, ?, ?, ?)`,
+            (id, workout_session_id, date, type, duration_seconds, count, succeeded)
+           VALUES (?, ?, ?, ?, ?, ?, ?)`,
           [
             c.id,
             c.workout_session_id,
+            cardioDate,
             c.type,
             c.duration_seconds ?? null,
             c.count ?? null,
@@ -248,17 +262,21 @@ export async function restoreFromBackup(data: BackupData): Promise<void> {
       }
     }
 
+
     // 6. Insert pullup logs
     if (data.pullupLogs && data.pullupLogs.length > 0) {
       for (const p of data.pullupLogs) {
+        const pullupDate =
+          (p as any).date ?? sessionDateById.get(String(p.workout_session_id)) ?? null;
         await db.run(
           `INSERT INTO pullup_logs
-            (id, workout_session_id, pullup_day, effective_day, set_number,
+            (id, workout_session_id, date, pullup_day, effective_day, set_number,
              reps, grip_type, target_reps, succeeded, total_reps, skipped)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             p.id,
             p.workout_session_id,
+            pullupDate,
             p.pullup_day,
             p.effective_day,
             p.set_number,
@@ -272,6 +290,7 @@ export async function restoreFromBackup(data: BackupData): Promise<void> {
         );
       }
     }
+
   } catch (error) {
     // If anything fails, the data may be partially inserted.
     // Re-throw so the caller can inform the user.

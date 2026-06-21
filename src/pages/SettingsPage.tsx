@@ -19,7 +19,7 @@ import {
   LogOut,  
 } from 'lucide-react';
 import { Card } from '../components/ui';
-import { ImportPreviewModal, GymCostCalculator } from '../components/settings';
+import { ImportPreviewModal, GymCostCalculator, SyncDiagnostics } from '../components/settings';
 import { exportAsJSON, exportAsCSV, pickAndParseBackup, restoreFromBackup } from '../utils';
 import type { ImportPreview } from '../utils';
 import { useAppStore } from '../stores/appStore';
@@ -52,7 +52,7 @@ function MenuItem({
   return (
     <Card
       onClick={disabled || loading ? undefined : onClick}
-      className={`flex items-center gap-4 !p-4 ${
+      className={`flex items-center gap-4 p-4! ${
         disabled || loading ? 'opacity-40 pointer-events-none' : ''
       }`}
     >
@@ -109,7 +109,7 @@ function ChangelogSection() {
       {/* Version header — always visible */}
       <Card
         onClick={() => setIsExpanded(!isExpanded)}
-        className="flex items-center gap-4 !p-4"
+        className="flex items-center gap-4 p-4!"
       >
         <div className="w-10 h-10 rounded-full flex items-center justify-center shrink-0 bg-[#333]">
           <Info size={20} className="text-[#888]" />
@@ -132,7 +132,7 @@ function ChangelogSection() {
       {isExpanded && (
         <div className="mt-2 space-y-3">
           {CHANGELOG.map((entry) => (
-            <Card key={entry.version} className="!p-4">
+            <Card key={entry.version} className="p-4!">
               <div className="flex items-baseline gap-2 mb-2">
                 <span className="text-green-500 font-bold text-sm">
                   v{entry.version}
@@ -323,6 +323,13 @@ export function SettingsPage() {
           />
         </Section>
 
+        {/* Sync diagnostics (temporary debug) */}
+        <Section title="Диагностика">
+          <SyncDiagnostics />
+        </Section>
+
+        
+        
         {/* Account */}
         <Section title="Аккаунт">
           <MenuItem

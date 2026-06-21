@@ -5,7 +5,7 @@
  * Update this file with each release.
  */
 
-export const APP_VERSION = '0.18.1';
+export const APP_VERSION = '0.18.2';
 
 export interface ChangelogEntry {
   version: string;
@@ -15,6 +15,14 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
 
+  {
+    version: '0.18.2',
+    date: '2026-06-21',
+    changes: [
+      'импорт заполняет date, диагностика синхронизации',
+    ],
+  },  
+  
   {
     version: '0.18.1',
     date: '2026-06-21',
