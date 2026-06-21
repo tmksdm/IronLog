@@ -150,6 +150,29 @@ export function SyncDiagnostics() {
     }
   };
 
+    const rawFetchTest = async () => {
+    setBusy(true);
+    setMessage('Прямой запрос к Supabase…');
+    try {
+      const url =
+        'https://khnepdfkjwpxwtbjvqiv.supabase.co/rest/v1/exercises?select=id&limit=1';
+      const anon =
+        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtobmVwZGZrandweHd0Ymp2cWl2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMwNTg0NTAsImV4cCI6MjA4ODYzNDQ1MH0.3eOC_PhzRWZXpBPH6vO57HUauM-g1vOGXqB-AkNEViU';
+      const t0 = Date.now();
+      const res = await fetch(url, {
+        headers: { apikey: anon, Authorization: `Bearer ${anon}` },
+      });
+      const ms = Date.now() - t0;
+      const text = await res.text();
+      setMessage(`HTTP ${res.status} за ${ms} мс. Ответ: ${text.slice(0, 200)}`);
+    } catch (err: any) {
+      setMessage(`fetch упал: ${err?.name ?? ''} ${err?.message ?? err}`);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+
   return (
     <Card className="p-4! space-y-3">
       <div className="text-white font-medium">Диагностика синхронизации</div>
@@ -172,6 +195,16 @@ export function SyncDiagnostics() {
           Подтянуть из облака
         </button>
       </div>
+
+      <button
+        onClick={rawFetchTest}
+        disabled={busy}
+        className="w-full h-10 rounded-xl bg-[#444] text-white text-sm font-medium
+          active:bg-[#555] transition-colors disabled:opacity-40"
+      >
+        Прямой запрос (тест сети)
+      </button>
+
 
       {info && (
         <div className="text-xs text-[#bbb] space-y-1 font-mono">

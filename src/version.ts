@@ -5,7 +5,7 @@
  * Update this file with each release.
  */
 
-export const APP_VERSION = '0.18.3';
+export const APP_VERSION = '0.18.4';
 
 export interface ChangelogEntry {
   version: string;
@@ -15,6 +15,14 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
 
+
+  {
+    version: '0.18.4',
+    date: '2026-06-21',
+    changes: [
+      'debug: прямой fetch-тест сети к Supabase',
+    ],
+  },    
 
   {
     version: '0.18.3',
