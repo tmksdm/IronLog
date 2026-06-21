@@ -5,6 +5,9 @@
  * Shows auth status, local row counts, cloud row counts, and last sync error.
  * Includes a manual "pull from cloud" button.
  *
+ * Resilient: shows local data first (fast), guards cloud calls with a timeout,
+ * and surfaces any error on-screen so it can be read on the phone (no console needed).
+ *
  * TEMPORARY: added to debug why a device shows empty data despite cloud backup.
  */
 
@@ -20,9 +23,20 @@ interface DiagInfo {
   localExercises: number;
   localUserExercises: number;
   localSessions: number;
-  cloudExercises: number | string;
-  cloudSessions: number | string;
+  cloudExercises: string;
+  cloudSessions: string;
 }
+
+/** Reject after `ms` so a hung network call can't freeze the UI forever. */
+function withTimeout<T>(promise: PromiseLike<T>, ms: number, label: string): Promise<T> {
+  return Promise.race([
+    Promise.resolve(promise),
+    new Promise<T>((_, reject) =>
+      setTimeout(() => reject(new Error(`${label}: таймаут ${ms} мс`)), ms)
+    ),
+  ]);
+}
+
 
 export function SyncDiagnostics() {
   const [info, setInfo] = useState<DiagInfo | null>(null);
@@ -32,13 +46,9 @@ export function SyncDiagnostics() {
 
   const runCheck = async () => {
     setBusy(true);
-    setMessage(null);
+    setMessage('Проверяю…');
     try {
-      // 1. Auth
-      const { data: { session } } = await supabase.auth.getSession();
-      const userId = session?.user?.id ?? null;
-
-      // 2. Local counts
+      // 1. Local counts first (fast, no network).
       const db = await getDb();
       const exAll = await db.query('SELECT COUNT(*) as cnt FROM exercises');
       const exUser = await db.query(
@@ -46,30 +56,74 @@ export function SyncDiagnostics() {
       );
       const sess = await db.query('SELECT COUNT(*) as cnt FROM workout_sessions');
 
-      // 3. Cloud counts (only if logged in)
-      let cloudExercises: number | string = '—';
-      let cloudSessions: number | string = '—';
-      if (userId) {
-        const exRes = await supabase
-          .from('exercises')
-          .select('id', { count: 'exact', head: true })
-          .eq('user_id', userId);
-        const seRes = await supabase
-          .from('workout_sessions')
-          .select('id', { count: 'exact', head: true })
-          .eq('user_id', userId);
-        cloudExercises = exRes.error ? `ошибка: ${exRes.error.message}` : (exRes.count ?? 0);
-        cloudSessions = seRes.error ? `ошибка: ${seRes.error.message}` : (seRes.count ?? 0);
-      }
-
-      setInfo({
-        userId,
+      const partial: DiagInfo = {
+        userId: null,
         localExercises: exAll.values?.[0]?.cnt ?? 0,
         localUserExercises: exUser.values?.[0]?.cnt ?? 0,
         localSessions: sess.values?.[0]?.cnt ?? 0,
-        cloudExercises,
-        cloudSessions,
-      });
+        cloudExercises: '…',
+        cloudSessions: '…',
+      };
+      // Show local data immediately, even before cloud responds.
+      setInfo({ ...partial });
+
+      // 2. Auth (guarded by timeout).
+      let userId: string | null = null;
+      try {
+        const { data } = await withTimeout(
+          supabase.auth.getSession(),
+          8000,
+          'getSession'
+        );
+        userId = data.session?.user?.id ?? null;
+      } catch (e: any) {
+        setMessage(`Auth: ${e?.message ?? e}`);
+      }
+      partial.userId = userId;
+      setInfo({ ...partial });
+
+      // 3. Cloud counts (guarded by timeout).
+      if (userId) {
+        try {
+          const exRes = await withTimeout<{ count: number | null; error: { message: string } | null }>(
+            supabase
+              .from('exercises')
+              .select('id', { count: 'exact', head: true })
+              .eq('user_id', userId),
+            8000,
+            'cloud exercises'
+          );
+          partial.cloudExercises = exRes.error
+            ? `ошибка: ${exRes.error.message}`
+            : String(exRes.count ?? 0);
+        } catch (e: any) {
+          partial.cloudExercises = `сбой: ${e?.message ?? e}`;
+        }
+        setInfo({ ...partial });
+
+        try {
+          const seRes = await withTimeout<{ count: number | null; error: { message: string } | null }>(
+            supabase
+              .from('workout_sessions')
+              .select('id', { count: 'exact', head: true })
+              .eq('user_id', userId),
+            8000,
+            'cloud sessions'
+          );
+          partial.cloudSessions = seRes.error
+            ? `ошибка: ${seRes.error.message}`
+            : String(seRes.count ?? 0);
+        } catch (e: any) {
+          partial.cloudSessions = `сбой: ${e?.message ?? e}`;
+        }
+        setInfo({ ...partial });
+      } else {
+        partial.cloudExercises = 'нет userId';
+        partial.cloudSessions = 'нет userId';
+        setInfo({ ...partial });
+      }
+
+      setMessage('Готово.');
     } catch (err: any) {
       setMessage(`Ошибка проверки: ${err?.message ?? err}`);
     } finally {
@@ -79,16 +133,14 @@ export function SyncDiagnostics() {
 
   const forcePull = async () => {
     setBusy(true);
-    setMessage(null);
+    setMessage('Тяну из облака…');
     try {
-      const hadChanges = await pullFromCloud();
+      const hadChanges = await withTimeout(pullFromCloud(), 30000, 'pullFromCloud');
       if (hadChanges) {
         await refreshNextDayInfo();
-        setMessage('Данные подтянуты из облака! Открой Главную/Историю.');
+        setMessage('Данные подтянуты! Открой Главную/Историю.');
       } else {
-        setMessage(
-          'pullFromCloud вернул false (пропущено или облако пусто). Сделай «Проверить» и посмотри причины.'
-        );
+        setMessage('pullFromCloud вернул false (пропущено или облако пусто). Нажми «Проверить».');
       }
       await runCheck();
     } catch (err: any) {
@@ -126,8 +178,8 @@ export function SyncDiagnostics() {
           <div>userId: {info.userId ? info.userId.slice(0, 8) + '…' : 'НЕТ (не залогинен)'}</div>
           <div>локально упражнений: {info.localExercises} (свои: {info.localUserExercises})</div>
           <div>локально тренировок: {info.localSessions}</div>
-          <div>облако упражнений: {String(info.cloudExercises)}</div>
-          <div>облако тренировок: {String(info.cloudSessions)}</div>
+          <div>облако упражнений: {info.cloudExercises}</div>
+          <div>облако тренировок: {info.cloudSessions}</div>
         </div>
       )}
 
