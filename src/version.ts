@@ -5,7 +5,7 @@
  * Update this file with each release.
  */
 
-export const APP_VERSION = '0.18.0';
+export const APP_VERSION = '0.18.1';
 
 export interface ChangelogEntry {
   version: string;
@@ -14,6 +14,15 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+
+  {
+    version: '0.18.1',
+    date: '2026-06-21',
+    changes: [
+      'Исправлено: приложение зависало на «Загрузка...» из-за миграции схемы — DDL-операции (пересоздание таблиц cardio_logs/pullup_logs) теперь выполняются вне транзакции, иначе на вебе зависал DROP TABLE при включённых внешних ключах',
+      'Исправлено: данные не подтягивались из облака на новом устройстве — засеянные стандартные упражнения ошибочно считались «реальными данными». Теперь признак нового устройства — отсутствие тренировок и пользовательских упражнений',
+    ],
+  },
 
   {
     version: '0.18.0',
