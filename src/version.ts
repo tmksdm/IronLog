@@ -5,7 +5,7 @@
  * Update this file with each release.
  */
 
-export const APP_VERSION = '0.21.0';
+export const APP_VERSION = '0.21.1';
 
 export interface ChangelogEntry {
   version: string;
@@ -14,6 +14,15 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+
+  {
+    version: '0.21.1',
+    date: '2026-06-21',
+    changes: [
+      'Удалены неиспользуемые компоненты табов пост-финиша (CardioStep, PullupStep, SummaryStep, PostWorkoutTabs)',
+    ],
+  },
+
 
   {
     version: '0.21.0',
