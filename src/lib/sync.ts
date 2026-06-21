@@ -289,15 +289,21 @@ export async function pullFromCloud(): Promise<boolean> {
     return false;
   }
 
-  // Check if local database already has data
+  // Check if local database already has REAL user data.
+  // Seed exercises (default 21 rows with fixed 'seed-' ids) are inserted on every
+  // fresh DB init, so their presence does NOT mean the device has real data.
+  // The honest "new device / reinstall" signal is: no workout sessions AND no
+  // user-created (non-seed) exercises.
   const db = await getDb();
-  const localExCount = await db.query('SELECT COUNT(*) as cnt FROM exercises');
   const localSessionCount = await db.query('SELECT COUNT(*) as cnt FROM workout_sessions');
-  const hasLocalExercises = (localExCount.values?.[0]?.cnt ?? 0) > 0;
+  const localUserExCount = await db.query(
+    "SELECT COUNT(*) as cnt FROM exercises WHERE id NOT LIKE 'seed-%'"
+  );
   const hasLocalSessions = (localSessionCount.values?.[0]?.cnt ?? 0) > 0;
+  const hasUserExercises = (localUserExCount.values?.[0]?.cnt ?? 0) > 0;
 
-  if (hasLocalExercises || hasLocalSessions) {
-    console.log('pullFromCloud: local data exists, skipping (local is authoritative)');
+  if (hasLocalSessions || hasUserExercises) {
+    console.log('pullFromCloud: real local data exists, skipping (local is authoritative)');
     return false;
   }
 
