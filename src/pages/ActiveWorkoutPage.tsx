@@ -4,10 +4,11 @@
  * Full active workout page.
  * Two modes:
  * 1. Active workout — exercise cards, nav grid, header, rest timer
- * 2. Post-finish — tab-based flow (Exercises review | Cardio | Pullups | Summary)
+ * 2. Post-finish — strength-only summary with body-weight-after input
  *
- * After pressing "Завершить" and confirming, switches to post-finish mode.
- * Rest timer works globally across all tabs.
+ * After pressing "Завершить" and confirming, switches to post-finish summary.
+ * Cardio and pull-ups are standalone activities now (launched from Home), so
+ * they are NOT part of the workout flow anymore (Stage 4).
  */
 
 import { useState, useCallback, useRef, useEffect } from 'react';
@@ -20,16 +21,9 @@ import {
   ExerciseCard,
   RestTimer,
   ConfirmModal,
-  PostWorkoutTabs,
   ExercisesReview,
 } from '../components/workout';
-import CardioStep from '../components/finish/CardioStep';
-import PullupStep from '../components/finish/PullupStep';
-import SummaryStep from '../components/finish/SummaryStep';
-import type { PullupStepResult } from '../types';
-import { pullupRepo } from '../db';
-import { applyRunResult } from '../utils/runningProgram';
-import { applyAndSaveDayResult } from '../utils/pullupProgram';
+import FinishSummary from '../components/workout/FinishSummary';
 
 export function ActiveWorkoutPage() {
   const navigate = useNavigate();
@@ -49,13 +43,7 @@ export function ActiveWorkoutPage() {
   const recordEndTime = useWorkoutStore((s) => s.recordEndTime);
   const postFinish = useWorkoutStore((s) => s.postFinish);
   const enterPostFinish = useWorkoutStore((s) => s.enterPostFinish);
-  const activeTab = useWorkoutStore((s) => s.activeTab);
   const finishWorkout = useWorkoutStore((s) => s.finishWorkout);
-  const isCardioCompleted = useWorkoutStore((s) => s.isCardioCompleted);
-  const treadmillSucceeded = useWorkoutStore((s) => s.treadmillSucceeded);
-  const cardioType = useWorkoutStore((s) => s.cardioType);
-  const pullupResult = useWorkoutStore((s) => s.pullupResult);
-  const savePullupResultToStore = useWorkoutStore((s) => s.savePullupResult);
 
   const refreshNextDayInfo = useAppStore((s) => s.refreshNextDayInfo);
 
@@ -158,65 +146,14 @@ export function ActiveWorkoutPage() {
     navigate('/', { replace: true });
   }, [cancelWorkout, refreshNextDayInfo, navigate]);
 
-  // ---- Post-finish handlers ----
+  // ---- Post-finish: save everything to DB (strength only) ----
 
-  // CardioStep calls onNext when done (saved or skipped)
-  const handleCardioNext = useCallback(() => {
-    // Skip cardio → switch to pullups tab
-    useWorkoutStore.getState().setActiveTab('pullups');
-  }, []);
-
-  // PullupStep calls onNext with result when completed
-  const handlePullupNext = useCallback(
-    (result: PullupStepResult) => {
-      savePullupResultToStore(result);
-    },
-    [savePullupResultToStore]
-  );
-
-  // SummaryStep "Завершить" — save everything to DB
   const handleFinalSave = useCallback(
     async (weightAfter: number | null) => {
       setIsSaving(true);
       try {
         const finishedSession = await finishWorkout(weightAfter);
-
         if (finishedSession) {
-          // Save pull-up logs to DB
-          const resultToSave = pullupResult;
-          if (resultToSave) {
-            await pullupRepo.savePullupSession({
-              workoutSessionId: finishedSession.id,
-              pullupDay: resultToSave.dayNumber,
-              effectiveDay: resultToSave.effectiveDay,
-              sets: resultToSave.sets,
-              totalReps: resultToSave.totalReps,
-              skipped: resultToSave.skipped,
-            });
-          }
-
-          // --- Apply program progressions AFTER successful save ---
-
-          // Running program
-          if (
-            isCardioCompleted &&
-            cardioType === 'treadmill_3km' &&
-            treadmillSucceeded !== null
-          ) {
-            applyRunResult(treadmillSucceeded);
-          }
-
-          // Pull-up program
-          if (resultToSave) {
-            applyAndSaveDayResult({
-              dayNumber: resultToSave.dayNumber,
-              day5ActualDay: resultToSave.day5ActualDay,
-              sets: resultToSave.sets,
-              totalReps: resultToSave.totalReps,
-              skipped: resultToSave.skipped,
-            });
-          }
-
           await refreshNextDayInfo();
           navigate(`/summary/${finishedSession.id}`, { replace: true });
         }
@@ -226,15 +163,7 @@ export function ActiveWorkoutPage() {
         setIsSaving(false);
       }
     },
-    [
-      finishWorkout,
-      pullupResult,
-      isCardioCompleted,
-      cardioType,
-      treadmillSucceeded,
-      refreshNextDayInfo,
-      navigate,
-    ]
+    [finishWorkout, refreshNextDayInfo, navigate]
   );
 
   // ---- Scroll helpers ----
@@ -261,13 +190,11 @@ export function ActiveWorkoutPage() {
 
   if (!session || !isActive) return null;
 
-  const exercisesDone = exercises.filter(
-    (e) => e.status === 'completed'
-  ).length;
+  const exercisesDone = exercises.filter((e) => e.status === 'completed').length;
   const exercisesTotal = exercises.length;
 
   // =======================================
-  // POST-FINISH MODE
+  // POST-FINISH MODE (strength-only summary)
   // =======================================
   if (postFinish) {
     return (
@@ -282,26 +209,13 @@ export function ActiveWorkoutPage() {
           postFinish
         />
 
-        {/* Tab bar */}
-        <PostWorkoutTabs />
-
-        {/* Tab content */}
+        {/* Content: exercise review + summary with weight input */}
         <div ref={scrollContainerRef} className="flex-1 overflow-y-auto pb-8">
-          {activeTab === 'exercises' && <ExercisesReview />}
-          {activeTab === 'cardio' && <CardioStep onNext={handleCardioNext} />}
-          {activeTab === 'pullups' && (
-            <PullupStep onNext={handlePullupNext} />
-          )}
-          {activeTab === 'summary' && (
-            <SummaryStep
-              onFinish={handleFinalSave}
-              isSaving={isSaving}
-              pullupResult={pullupResult}
-            />
-          )}
+          <ExercisesReview />
+          <FinishSummary onFinish={handleFinalSave} isSaving={isSaving} />
         </div>
 
-        {/* Rest timer — works globally across all tabs */}
+        {/* Rest timer (in case a rest is still running) */}
         <RestTimer />
       </div>
     );
@@ -335,10 +249,7 @@ export function ActiveWorkoutPage() {
       >
         <div className="flex flex-col gap-4 py-4">
           {exercises.map((ae, idx) => (
-            <div
-              key={ae.exercise.id}
-              ref={(el) => setExerciseRef(idx, el)}
-            >
+            <div key={ae.exercise.id} ref={(el) => setExerciseRef(idx, el)}>
               <ExerciseCard
                 activeExercise={ae}
                 exerciseIndex={idx}

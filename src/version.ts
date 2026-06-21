@@ -5,7 +5,7 @@
  * Update this file with each release.
  */
 
-export const APP_VERSION = '0.20.0';
+export const APP_VERSION = '0.21.0';
 
 export interface ChangelogEntry {
   version: string;
@@ -14,6 +14,17 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+
+  {
+    version: '0.21.0',
+    date: '2026-06-21',
+    changes: [
+      'Этап 4: после завершения тренировки — сразу краткие итоги с вводом веса тела, без вкладок «Кардио» и «Подтягивания»',
+      'Бег и турник теперь только отдельные активности с главного экрана и больше не входят в поток тренировки',
+      'Прогрессия бега и турника применяется только на своих экранах; из тренировочного потока убрана',
+    ],
+  },
+
 
   {
     version: '0.20.0',

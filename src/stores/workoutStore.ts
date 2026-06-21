@@ -2,6 +2,8 @@
 
 /**
  * Active workout lifecycle store.
+ * Stage 4: cardio & pull-ups are standalone activities now — the workout
+ * flow handles ONLY strength exercises. No cardio/pullup/tab state here.
  */
 
 import { create } from 'zustand';
@@ -11,11 +13,7 @@ import type {
   ExerciseStatus,
   WorkoutSession,
   WorkoutSnapshot,
-  CardioType,
   Exercise,
-  PullupStepResult,
-  PostWorkoutTab,
-  PullupInProgressState,
 } from '../types';
 import {
   exerciseRepo,
@@ -62,20 +60,12 @@ export interface WorkoutState {
   isRestTimerRunning: boolean;
   stopwatchSeconds: number;
   isStopwatchRunning: boolean;
-  cardioType: CardioType | null;
-  jumpRopeCount: number | null;
-  treadmillSeconds: number | null;
-  treadmillSucceeded: boolean | null;
-  isCardioCompleted: boolean;
-  pullupResult: PullupStepResult | null;
   _isRestoring: boolean;
 
-  // Post-finish tab state (v0.16)
+  // Post-finish summary mode
   postFinish: boolean;
-  activeTab: PostWorkoutTab;
-  pullupInProgress: PullupInProgressState | null;
 
-  // Rest timer finish callback (for pullups integration)
+  // Rest timer finish callback
   onRestTimerFinish: (() => void) | null;
 
   startWorkout: (
@@ -93,10 +83,6 @@ export interface WorkoutState {
   updateSetReps: (exerciseIndex: number, setIndex: number, reps: number) => void;
   skipExercise: (exerciseIndex: number) => void;
   unskipExercise: (exerciseIndex: number) => void;
-  saveJumpRope: (count: number) => void;
-  saveTreadmill: (seconds: number, succeeded: boolean | null) => void;
-  clearCardio: () => void;
-  savePullupResult: (result: PullupStepResult | null) => void;
   setRestTimerDefault: (seconds: number) => void;
   startRestTimer: () => void;
   startRestTimerWithDuration: (seconds: number) => void;
@@ -108,11 +94,8 @@ export interface WorkoutState {
   resetStopwatch: () => void;
   tickStopwatch: () => void;
 
-  // Post-finish actions (v0.16)
+  // Post-finish actions
   enterPostFinish: () => void;
-  setActiveTab: (tab: PostWorkoutTab) => void;
-  setPullupInProgress: (state: PullupInProgressState | null) => void;
-  updatePullupInProgress: (updates: Partial<PullupInProgressState>) => void;
 }
 
 // ---- Helpers ----
@@ -133,16 +116,8 @@ function buildSnapshot(state: WorkoutState): WorkoutSnapshot | null {
     session: state.session,
     exercises: state.exercises as any,
     currentExerciseIndex: state.currentExerciseIndex,
-    cardioType: state.cardioType,
-    jumpRopeCount: state.jumpRopeCount,
-    treadmillSeconds: state.treadmillSeconds,
-    treadmillSucceeded: state.treadmillSucceeded,
-    isCardioCompleted: state.isCardioCompleted,
     restTimerDefault: state.restTimerDefault,
-    pullupResult: state.pullupResult,
     postFinish: state.postFinish,
-    activeTab: state.activeTab,
-    pullupInProgress: state.pullupInProgress,
   };
 }
 
@@ -205,18 +180,10 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
   isRestTimerRunning: false,
   stopwatchSeconds: 0,
   isStopwatchRunning: false,
-  cardioType: null,
-  jumpRopeCount: null,
-  treadmillSeconds: null,
-  treadmillSucceeded: null,
-  isCardioCompleted: false,
-  pullupResult: null,
   _isRestoring: false,
 
-  // Post-finish (v0.16)
+  // Post-finish
   postFinish: false,
-  activeTab: 'cardio',
-  pullupInProgress: null,
 
   // Rest timer finish callback
   onRestTimerFinish: null,
@@ -296,22 +263,12 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
         });
       }
 
-      const cardioType: CardioType = dayTypeId === 1 ? 'jump_rope' : 'treadmill_3km';
-
       set({
         session,
         isActive: true,
         exercises: activeExercises,
         currentExerciseIndex: 0,
-        cardioType,
-        jumpRopeCount: null,
-        treadmillSeconds: null,
-        treadmillSucceeded: null,
-        isCardioCompleted: false,
-        pullupResult: null,
         postFinish: false,
-        activeTab: 'cardio',
-        pullupInProgress: null,
         onRestTimerFinish: null,
       });
 
@@ -331,20 +288,12 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
       isActive: true,
       exercises: snapshot.exercises as any,
       currentExerciseIndex: snapshot.currentExerciseIndex,
-      cardioType: snapshot.cardioType,
-      jumpRopeCount: snapshot.jumpRopeCount,
-      treadmillSeconds: snapshot.treadmillSeconds,
-      treadmillSucceeded: snapshot.treadmillSucceeded ?? null,
-      isCardioCompleted: snapshot.isCardioCompleted,
       restTimerDefault: snapshot.restTimerDefault,
-      pullupResult: snapshot.pullupResult ?? null,
       restTimerSeconds: 0,
       isRestTimerRunning: false,
       stopwatchSeconds: 0,
       isStopwatchRunning: false,
       postFinish: snapshot.postFinish ?? false,
-      activeTab: snapshot.activeTab ?? 'cardio',
-      pullupInProgress: snapshot.pullupInProgress ?? null,
       onRestTimerFinish: null,
     });
     setTimeout(() => set({ _isRestoring: false }), 0);
@@ -361,31 +310,10 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
   },
 
   // =======================================
-  // ENTER POST-FINISH MODE (v0.16)
+  // ENTER POST-FINISH MODE
   // =======================================
   enterPostFinish: () => {
-    const state = get();
-    if (!state.session || state.session.timeEnd) {
-      // recordEndTime not called yet — do nothing, caller should call recordEndTime first
-    }
-    set({ postFinish: true, activeTab: 'cardio' });
-    persistState(get());
-  },
-
-  setActiveTab: (tab) => {
-    set({ activeTab: tab });
-    persistState(get());
-  },
-
-  setPullupInProgress: (pullupState) => {
-    set({ pullupInProgress: pullupState });
-    persistState(get());
-  },
-
-  updatePullupInProgress: (updates) => {
-    const current = get().pullupInProgress;
-    if (!current) return;
-    set({ pullupInProgress: { ...current, ...updates } });
+    set({ postFinish: true });
     persistState(get());
   },
 
@@ -465,20 +393,6 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
         session.timeEnd ?? new Date().toISOString()
       );
 
-      // Save cardio
-      if (state.isCardioCompleted && state.cardioType) {
-        await workoutRepo.createCardioLog({
-          workoutSessionId: session.id,
-          type: state.cardioType,
-          durationSeconds:
-            state.cardioType === 'treadmill_3km' ? state.treadmillSeconds : null,
-          count:
-            state.cardioType === 'jump_rope' ? state.jumpRopeCount : null,
-          succeeded:
-            state.cardioType === 'treadmill_3km' ? state.treadmillSucceeded : null,
-        });
-      }
-
       const finishedSession = await workoutRepo.getWorkoutSessionById(session.id);
       await workoutStateRepo.clearWorkoutState();
 
@@ -486,7 +400,6 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
       pushToCloud().catch((err) =>
         console.error('Cloud sync after workout failed:', err)
       );
-
 
       set({
         session: finishedSession,
@@ -497,15 +410,7 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
         restTimerSeconds: 0,
         isStopwatchRunning: false,
         stopwatchSeconds: 0,
-        cardioType: null,
-        jumpRopeCount: null,
-        treadmillSeconds: null,
-        treadmillSucceeded: null,
-        isCardioCompleted: false,
-        pullupResult: null,
         postFinish: false,
-        activeTab: 'cardio',
-        pullupInProgress: null,
         onRestTimerFinish: null,
       });
 
@@ -540,15 +445,7 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
       restTimerSeconds: 0,
       isStopwatchRunning: false,
       stopwatchSeconds: 0,
-      cardioType: null,
-      jumpRopeCount: null,
-      treadmillSeconds: null,
-      treadmillSucceeded: null,
-      isCardioCompleted: false,
-      pullupResult: null,
       postFinish: false,
-      activeTab: 'cardio',
-      pullupInProgress: null,
       onRestTimerFinish: null,
     });
   },
@@ -686,33 +583,6 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
       exercise.status = getExerciseStatus(exercise.sets, exercise.exercise.isTimed);
       return { exercises: newExercises };
     });
-    persistState(get());
-  },
-
-
-  // =======================================
-  // CARDIO
-  // =======================================
-  saveJumpRope: (count) => {
-    set({ jumpRopeCount: count, isCardioCompleted: true });
-    persistState(get());
-  },
-
-  saveTreadmill: (seconds, succeeded) => {
-    set({ treadmillSeconds: seconds, treadmillSucceeded: succeeded, isCardioCompleted: true });
-    persistState(get());
-  },
-
-  clearCardio: () => {
-    set({ jumpRopeCount: null, treadmillSeconds: null, isCardioCompleted: false });
-    persistState(get());
-  },
-
-  // =======================================
-  // PULLUPS
-  // =======================================
-  savePullupResult: (result) => {
-    set({ pullupResult: result });
     persistState(get());
   },
 

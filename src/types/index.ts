@@ -108,18 +108,11 @@ export interface WorkoutSnapshot {
   session: WorkoutSession;
   exercises: ActiveExercise[];
   currentExerciseIndex: number;
-  cardioType: CardioType | null;
-  jumpRopeCount: number | null;
-  treadmillSeconds: number | null;
-  treadmillSucceeded: boolean | null;
-  isCardioCompleted: boolean;
   restTimerDefault: number;
-  pullupResult: PullupStepResult | null;
-  /** v0.16: post-finish state */
+  /** post-finish summary mode */
   postFinish?: boolean;
-  activeTab?: PostWorkoutTab;
-  pullupInProgress?: PullupInProgressState | null;
 }
+
 
 // --- Analytics types ---
 
