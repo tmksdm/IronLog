@@ -5,7 +5,7 @@
  * Update this file with each release.
  */
 
-export const APP_VERSION = '0.19.0';
+export const APP_VERSION = '0.20.0';
 
 export interface ChangelogEntry {
   version: string;
@@ -14,6 +14,17 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+
+  {
+    version: '0.20.0',
+    date: '2026-06-21',
+    changes: [
+      'Этап 3: отдельный экран «Турник» — запускается с главного экрана, не привязан к тренировке',
+      'Своя защита от вылета: незавершённая сессия турника сохраняется отдельно и предлагается продолжить при повторном входе',
+      'Подтягивания пишутся как самостоятельная запись (своя дата), прогрессия программы применяется при сохранении',
+      'Кнопка «Турник» на главном экране теперь активна',
+    ],
+  },
 
 
   {

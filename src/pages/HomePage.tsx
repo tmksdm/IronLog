@@ -125,8 +125,8 @@ export function HomePage() {
         {/* Secondary "by mood" activities — NOT in bottom nav */}
         <div className="flex gap-3 mt-3">
           <button
-            disabled
-            className="flex-1 flex flex-col items-center justify-center gap-1.5 py-4 rounded-xl bg-[#1E1E1E] border border-[#333333] text-[#707070] opacity-50 pointer-events-none"
+            onClick={() => navigate('/pullups')}
+            className="flex-1 flex flex-col items-center justify-center gap-1.5 py-4 rounded-xl bg-[#1E1E1E] border border-[#333333] text-[#B0B0B0] active:bg-[#2A2A2A] transition-colors"
           >
             <ArrowUpToLine size={22} />
             <span className="text-sm font-semibold">Турник</span>

@@ -317,3 +317,13 @@ export interface PullupInProgressState {
   /** Rest timer: total seconds for current rest (for progress ring) */
   restSecondsTotal: number;
 }
+
+/**
+ * Snapshot of a STANDALONE pull-up session for crash resilience.
+ * Stored in the `pullup_active_state` table (separate from workout snapshot).
+ * `inProgress` reuses the same shape as the in-workout pull-up state.
+ */
+export interface PullupSessionSnapshot {
+  inProgress: PullupInProgressState;
+  updatedAt: string;
+}

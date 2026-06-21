@@ -25,6 +25,7 @@ import { AnalyticsPage } from './pages/AnalyticsPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { ExerciseEditorPage } from './pages/ExerciseEditorPage';
 import { RunningPage } from './pages/RunningPage';
+import { PullupsPage } from './pages/PullupsPage';
 import { startUpdateChecker } from './utils/updateChecker';
 
 /** Pages where the bottom nav should be hidden */
@@ -100,6 +101,7 @@ function AppContent() {
         <Route path="/settings" element={<SettingsPage />} />
         <Route path="/exercises" element={<ExerciseEditorPage />} />
         <Route path="/running" element={<RunningPage />} />
+        <Route path="/pullups" element={<PullupsPage />} />        
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
 
