@@ -150,10 +150,32 @@ function App() {
 
     checkSession();
 
-    // Listen for auth state changes (login, logout, token refresh)
+    // Listen for auth state changes.
+    // IMPORTANT: only log the user OUT on an explicit SIGNED_OUT event.
+    // When the WebView wakes from sleep, Supabase may briefly emit events
+    // with a null session while refreshing the token — those must NOT kick
+    // the user to the login screen mid-workout. As an extra guard, if a
+    // cached token still exists in localStorage, we keep the user logged in.
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (_event, session) => {
-        setIsAuthenticated(!!session);
+      (event, session) => {
+        if (session) {
+          // Valid session present (login or successful token refresh).
+          setIsAuthenticated(true);
+          return;
+        }
+
+        if (event === 'SIGNED_OUT') {
+          // Real logout (user pressed "Logout" or token fully revoked).
+          setIsAuthenticated(false);
+          return;
+        }
+
+        // No session in this event, but it's NOT an explicit sign-out.
+        // If a token is still cached, ignore this transient state.
+        if (!hasLocalSupabaseSession()) {
+          setIsAuthenticated(false);
+        }
+        // Otherwise: do nothing — keep the user where they are.
       }
     );
 

@@ -5,7 +5,7 @@
  * Update this file with each release.
  */
 
-export const APP_VERSION = '0.17.3';
+export const APP_VERSION = '0.17.4';
 
 export interface ChangelogEntry {
   version: string;
@@ -14,6 +14,14 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+
+  {
+    version: '0.17.4',
+    date: '2026-06-21',
+    changes: [
+      'Исправлено: ложный выход на экран логина при пробуждении приложения из фона во время тренировки. Теперь разлогинивает только при настоящем выходе (SIGNED_OUT), а не при промежуточных событиях обновления токена.',
+    ],
+  },
 
   {
     version: '0.17.3',
