@@ -624,3 +624,48 @@ export async function deleteMultipleSessionsFromCloud(sessionIds: string[]): Pro
     console.error('deleteMultipleSessionsFromCloud error:', error);
   }
 }
+
+
+// ==========================================
+// DELETE helpers for STANDALONE cardio/pullup entries (by their own id)
+// ==========================================
+
+/**
+ * Delete a single standalone cardio log from Supabase by its own id.
+ */
+export async function deleteCardioLogFromCloud(cardioLogId: string): Promise<void> {
+  const userId = await getUserId();
+  if (!userId) return;
+
+  try {
+    const { error } = await supabase
+      .from('cardio_logs')
+      .delete()
+      .eq('id', cardioLogId)
+      .eq('user_id', userId);
+    if (error) console.error('deleteCardioLogFromCloud error:', error.message);
+  } catch (error) {
+    console.error('deleteCardioLogFromCloud error:', error);
+  }
+}
+
+/**
+ * Delete a whole standalone pull-up session from Supabase.
+ * A standalone session is identified by a list of row ids (all sets of that session).
+ */
+export async function deletePullupLogsFromCloud(pullupLogIds: string[]): Promise<void> {
+  const userId = await getUserId();
+  if (!userId || pullupLogIds.length === 0) return;
+
+  try {
+    const { error } = await supabase
+      .from('pullup_logs')
+      .delete()
+      .in('id', pullupLogIds)
+      .eq('user_id', userId);
+    if (error) console.error('deletePullupLogsFromCloud error:', error.message);
+  } catch (error) {
+    console.error('deletePullupLogsFromCloud error:', error);
+  }
+}
+

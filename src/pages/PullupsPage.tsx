@@ -100,7 +100,10 @@ export function PullupsPage() {
   // ---- Save a finished/skipped session ----
   const saveSession = useCallback(
     async (res: PullupStepResult) => {
-      if (isSaving) return;
+      // Guard against double-invocation: savingRef is synchronous (set immediately),
+      // unlike the isSaving state which updates on the next render. The setTimeout
+      // in PullupCore can fire onComplete more than once before isSaving flips.
+      if (savingRef.current) return;
       savingRef.current = true;
       setIsSaving(true);
       try {

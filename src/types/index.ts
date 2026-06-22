@@ -253,6 +253,28 @@ export interface YearlyPullups {
   sessionCount: number;
 }
 
+
+/**
+ * A standalone pull-up session (workout_session_id IS NULL), assembled by
+ * grouping all set rows that share the same `date`. Used by the History
+ * "Турник" filter — one object = one card.
+ */
+export interface StandalonePullupSession {
+  /** Save timestamp shared by all sets of this session (grouping key) */
+  date: string;
+  /** Program day (1–5) */
+  pullupDay: number;
+  /** Effective day (1–4, resolves day 5) */
+  effectiveDay: number;
+  /** Total reps across all sets */
+  totalReps: number;
+  /** Number of sets performed */
+  setCount: number;
+  /** ids of all set rows — used for deletion */
+  ids: string[];
+}
+
+
 export interface PullupStepResult {
   dayNumber: 1 | 2 | 3 | 4 | 5;
   effectiveDay: 1 | 2 | 3 | 4;

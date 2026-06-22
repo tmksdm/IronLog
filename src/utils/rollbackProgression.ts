@@ -95,6 +95,112 @@ export async function rollbackProgressionForAllSessions(): Promise<void> {
   }
 }
 
+
+/**
+ * Rollback progression for a deleted STANDALONE running entry.
+ * Only rolls back if the deleted entry is the most recent run result
+ * (across BOTH standalone and in-workout cardio).
+ * `cardioLogId` is the id of the deleted cardio_logs row.
+ * `entryDate` is its `date` value.
+ * Call BEFORE deleting from DB.
+ */
+export async function rollbackStandaloneRun(
+  cardioLogId: string,
+  _entryDate: string
+): Promise<void> {
+  const db = await getDb();
+
+  // Is this entry a treadmill run with a result?
+  const self = await db.query(
+    `SELECT succeeded FROM cardio_logs
+     WHERE id = ? AND type = 'treadmill_3km' AND succeeded IS NOT NULL`,
+    [cardioLogId]
+  );
+  if (!self.values || self.values.length === 0) return;
+
+  // Find the most recent treadmill run WITH a result, across all entries.
+  // For standalone entries `date` is set; for in-workout we fall back to the
+  // session date. We compare by an effective date expression.
+  const last = await db.query(
+    `SELECT cl.id,
+            COALESCE(cl.date, ws.date) AS eff_date
+     FROM cardio_logs cl
+     LEFT JOIN workout_sessions ws ON cl.workout_session_id = ws.id
+     WHERE cl.type = 'treadmill_3km' AND cl.succeeded IS NOT NULL
+     ORDER BY eff_date DESC
+     LIMIT 1`
+  );
+  const lastId = last.values?.[0]?.id;
+  if (lastId !== cardioLogId) return; // Not the latest — skip
+
+  const succeeded = self.values[0]!.succeeded === 1;
+  reverseRunResult(succeeded);
+}
+
+/**
+ * Rollback progression for a deleted STANDALONE pull-up session.
+ * Only rolls back if the deleted session is the most recent pull-up session
+ * (across BOTH standalone and in-workout), and was not skipped.
+ * `ids` are the pullup_logs row ids of the session.
+ * `entryDate` is the shared `date` of the session.
+ * Call BEFORE deleting from DB.
+ */
+export async function rollbackStandalonePullup(
+  ids: string[],
+  entryDate: string
+): Promise<void> {
+  if (ids.length === 0) return;
+  const db = await getDb();
+
+  // Find the most recent non-skipped pull-up session across all entries.
+  // Standalone sessions are grouped by `date`; in-workout by session date.
+  const last = await db.query(
+    `SELECT COALESCE(pl.date, ws.date) AS eff_date
+     FROM pullup_logs pl
+     LEFT JOIN workout_sessions ws ON pl.workout_session_id = ws.id
+     WHERE pl.skipped = 0 AND COALESCE(pl.date, ws.date) IS NOT NULL
+     ORDER BY eff_date DESC
+     LIMIT 1`
+  );
+  const lastEffDate = last.values?.[0]?.eff_date;
+  if (!lastEffDate || lastEffDate !== entryDate) return; // Not the latest — skip
+
+  // Load the rows of this session by ids
+  const placeholders = ids.map(() => '?').join(',');
+  const rowsResult = await db.query(
+    `SELECT * FROM pullup_logs WHERE id IN (${placeholders}) ORDER BY set_number`,
+    ids
+  );
+  const rows = (rowsResult.values ?? []) as any[];
+  if (rows.length === 0) return;
+
+  const first = rows[0]!;
+  if (first.skipped === 1) return; // Skipped sessions don't affect progression
+
+  // Reconstruct PullupDayResult
+  const dayResult: PullupDayResult = {
+    dayNumber: first.pullup_day as PullupDayNumber,
+    day5ActualDay:
+      first.effective_day !== first.pullup_day
+        ? (first.effective_day as 1 | 2 | 3 | 4)
+        : null,
+    sets: rows.map((r) => ({
+      setNumber: r.set_number,
+      reps: r.reps,
+      grip: (r.grip_type as 'normal' | 'reverse' | 'wide') ?? null,
+      targetReps: r.target_reps,
+      succeeded: r.succeeded === 1,
+    })),
+    totalReps: rows.reduce((sum, r) => sum + (r.reps ?? 0), 0),
+    skipped: false,
+  };
+
+  const currentState = loadPullupProgram();
+  const previousState = reverseDayResult(currentState, dayResult);
+  savePullupProgram(previousState);
+}
+
+
 // ---- Internal helpers ----
 
 async function rollbackPullupProgression(sessionId: string): Promise<void> {

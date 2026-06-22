@@ -8,7 +8,7 @@
  * then applies the running program progression. Shows a brief confirmation.
  */
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { RunningCore } from '../components/finish';
 import { Button } from '../components/ui';
@@ -24,11 +24,11 @@ export function RunningPage() {
     seconds: number;
     succeeded: boolean | null;
   } | null>(null);
-  const [isSaving, setIsSaving] = useState(false);
+  const savingRef = useRef(false);
 
   const handleSave = async (totalSeconds: number, succeeded: boolean | null) => {
-    if (isSaving) return;
-    setIsSaving(true);
+    if (savingRef.current) return;
+    savingRef.current = true;
     try {
       // Standalone entry: no workout session, date = now.
       await workoutRepo.createCardioLog({
@@ -52,7 +52,7 @@ export function RunningPage() {
       setSaved({ seconds: totalSeconds, succeeded });
     } catch (err) {
       console.error('Failed to save standalone run:', err);
-      setIsSaving(false);
+      savingRef.current = false;
     }
   };
 

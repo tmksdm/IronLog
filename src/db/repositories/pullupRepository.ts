@@ -3,7 +3,7 @@
 // ==========================================
 
 import { getDb, generateId, saveToStore } from '../database';
-import type { PullupLog, MonthlyPullups, YearlyPullups } from '../../types';
+import type { PullupLog, MonthlyPullups, YearlyPullups, StandalonePullupSession } from '../../types';
 import type { PullupSetResult, PullupDayNumber } from '../../utils/pullupProgram';
 
 // ---- Row mapping ----
@@ -135,6 +135,70 @@ export async function deleteAllPullups(): Promise<void> {
   await db.run('DELETE FROM pullup_logs');
   await saveToStore();
 }
+
+
+// ==========================================
+// Standalone pull-up sessions (workout_session_id IS NULL)
+// ==========================================
+
+/**
+ * Get all standalone pull-up sessions (not tied to a workout), newest first.
+ * Rows are grouped by `date` (all sets of one session share the same timestamp).
+ * Skip-marker rows (skipped=1) are included as zero-rep sessions.
+ */
+export async function getStandalonePullupSessions(): Promise<StandalonePullupSession[]> {
+  const db = await getDb();
+  const result = await db.query(
+    `SELECT * FROM pullup_logs
+     WHERE workout_session_id IS NULL AND date IS NOT NULL
+     ORDER BY date DESC, set_number ASC`
+  );
+  const rows = (result.values ?? []) as any[];
+
+  // Group rows by their shared date (= one session)
+  const byDate = new Map<string, StandalonePullupSession>();
+  for (const row of rows) {
+    const date = String(row.date);
+    let session = byDate.get(date);
+    if (!session) {
+      session = {
+        date,
+        pullupDay: row.pullup_day,
+        effectiveDay: row.effective_day,
+        totalReps: 0,
+        setCount: 0,
+        ids: [],
+      };
+      byDate.set(date, session);
+    }
+    session.ids.push(row.id);
+    // Skip-marker rows don't count as real sets
+    if (row.skipped !== 1) {
+      session.totalReps += row.reps ?? 0;
+      session.setCount += 1;
+    }
+  }
+
+  return Array.from(byDate.values());
+}
+
+/**
+ * Delete a standalone pull-up session by its row ids (all sets of one session).
+ * Syncs the deletion to the cloud.
+ */
+export async function deletePullupLogsByIds(ids: string[]): Promise<void> {
+  if (ids.length === 0) return;
+  const db = await getDb();
+  const placeholders = ids.map(() => '?').join(',');
+  await db.run(`DELETE FROM pullup_logs WHERE id IN (${placeholders})`, ids);
+  await saveToStore();
+
+  const { deletePullupLogsFromCloud } = await import('../../lib/sync');
+  deletePullupLogsFromCloud(ids).catch((err) =>
+    console.error('Cloud sync after standalone pullup delete failed:', err)
+  );
+}
+
 
 // ---- Analytics ----
 

@@ -56,6 +56,7 @@ function mapCardioRow(row: any): CardioLog {
   return {
     id: row.id,
     workoutSessionId: row.workout_session_id,
+    date: row.date ?? undefined,
     type: row.type as CardioType,
     durationSeconds: row.duration_seconds,
     count: row.count,
@@ -462,6 +463,61 @@ export async function getCardioBySession(
   );
   return (result.values ?? []).map(mapCardioRow);
 }
+
+
+// ==========================================
+// Standalone cardio entries (workout_session_id IS NULL)
+// ==========================================
+
+/**
+ * Get all standalone cardio logs (not tied to a workout session),
+ * newest first. Used by the History "Бег" filter.
+ */
+export async function getStandaloneCardioLogs(): Promise<CardioLog[]> {
+  const db = await getDb();
+  const result = await db.query(
+    `SELECT * FROM cardio_logs
+     WHERE workout_session_id IS NULL AND date IS NOT NULL
+     ORDER BY date DESC`
+  );
+  return (result.values ?? []).map(mapCardioRow);
+}
+
+/**
+ * Delete a single standalone cardio log by its own id.
+ * Syncs the deletion to the cloud.
+ */
+export async function deleteCardioLogById(id: string): Promise<void> {
+  const db = await getDb();
+  await db.run('DELETE FROM cardio_logs WHERE id = ?', [id]);
+  await saveToStore();
+
+  const { deleteCardioLogFromCloud } = await import('../../lib/sync');
+  deleteCardioLogFromCloud(id).catch((err) =>
+    console.error('Cloud sync after standalone cardio delete failed:', err)
+  );
+}
+
+/**
+ * Delete multiple standalone cardio logs by their ids (batch).
+ * Syncs the deletions to the cloud.
+ */
+export async function deleteCardioLogsByIds(ids: string[]): Promise<void> {
+  if (ids.length === 0) return;
+  const db = await getDb();
+  const placeholders = ids.map(() => '?').join(',');
+  await db.run(`DELETE FROM cardio_logs WHERE id IN (${placeholders})`, ids);
+  await saveToStore();
+
+  const { deleteCardioLogFromCloud } = await import('../../lib/sync');
+  // Cloud helper deletes one id at a time; fire them all (best-effort).
+  for (const id of ids) {
+    deleteCardioLogFromCloud(id).catch((err) =>
+      console.error('Cloud sync after standalone cardio batch delete failed:', err)
+    );
+  }
+}
+
 
 // ==========================================
 // Exercise Summary (for workout detail/finish screen)
