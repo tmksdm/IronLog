@@ -5,7 +5,7 @@
  * Update this file with each release.
  */
 
-export const APP_VERSION = '0.22.0';
+export const APP_VERSION = '0.23.0';
 
 export interface ChangelogEntry {
   version: string;
@@ -14,6 +14,17 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+
+  {
+    version: '0.23.0',
+    date: '2026-08-20',
+    changes: [
+      'Добавлен отдельный экран «Скакалка» с таймером 1:15 и сохранением количества прыжков.',
+      'Кнопка «Скакалка» размещена в одном ряду с кнопками «Турник» и «Бег».',
+      'В истории появился отдельный фильтр и карточки тренировок со скакалкой.',
+      'Исправлена облачная синхронизация даты у отдельных кардио-тренировок.',
+    ],
+  },
 
   {
     version: '0.22.0',

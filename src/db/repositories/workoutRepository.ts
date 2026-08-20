@@ -442,6 +442,7 @@ export async function createCardioLog(data: {
   return {
     id,
     workoutSessionId: data.workoutSessionId,
+    date,
     type: data.type,
     durationSeconds: data.durationSeconds,
     count: data.count,
@@ -471,7 +472,7 @@ export async function getCardioBySession(
 
 /**
  * Get all standalone cardio logs (not tied to a workout session),
- * newest first. Used by the History "Бег" filter.
+ * newest first. Used by the History cardio filters.
  */
 export async function getStandaloneCardioLogs(): Promise<CardioLog[]> {
   const db = await getDb();

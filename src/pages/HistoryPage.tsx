@@ -24,6 +24,7 @@ import {
   ChevronDown,
   Footprints,
   Activity,
+  RotateCcw,
 } from 'lucide-react';
 import { workoutRepo, pullupRepo } from '../db';
 import type { WorkoutSession, CardioLog, StandalonePullupSession } from '../types';
@@ -32,10 +33,12 @@ import {
   SessionCard,
   RunCard,
   PullupCard,
+  JumpRopeCard,
   groupByMonth,
   pluralize,
   PULLUP_ACCENT,
   RUNNING_ACCENT,
+  JUMP_ROPE_ACCENT,
 } from '../components/history';
 import { getDayTypeColor } from '../theme';
 import { useAppStore } from '../stores/appStore';
@@ -48,7 +51,7 @@ import {
 
 
 // Filter options
-type FilterOption = 'all' | 1 | 2 | 3 | 'running' | 'pullups';
+type FilterOption = 'all' | 1 | 2 | 3 | 'jump-rope' | 'running' | 'pullups';
 
 const FILTER_OPTIONS: { value: FilterOption; label: string }[] = [
   { value: 'all', label: 'Все' },
@@ -57,6 +60,7 @@ const FILTER_OPTIONS: { value: FilterOption; label: string }[] = [
   { value: 3, label: 'Жим' },
   { value: 'pullups', label: 'Турник' },
   { value: 'running', label: 'Бег' },
+  { value: 'jump-rope', label: 'Скакалка' },
 ];
 
 // Pagination
@@ -71,7 +75,7 @@ function parseStoredFilter(saved: string | null): FilterOption {
   if (saved === '1' || saved === '2' || saved === '3') {
     return parseInt(saved, 10) as 1 | 2 | 3;
   }
-  if (saved === 'running' || saved === 'pullups') return saved;
+  if (saved === 'running' || saved === 'pullups' || saved === 'jump-rope') return saved;
   return 'all';
 }
 
@@ -82,6 +86,7 @@ export function HistoryPage() {
   // Data per mode
   const [sessions, setSessions] = useState<WorkoutSession[]>([]);
   const [runs, setRuns] = useState<CardioLog[]>([]);
+  const [jumpRopes, setJumpRopes] = useState<CardioLog[]>([]);
   const [pullups, setPullups] = useState<StandalonePullupSession[]>([]);
 
   const [isLoading, setIsLoading] = useState(true);
@@ -92,6 +97,7 @@ export function HistoryPage() {
 
   const isStrengthMode = filter === 'all' || typeof filter === 'number';
   const isRunningMode = filter === 'running';
+  const isJumpRopeMode = filter === 'jump-rope';
   const isPullupMode = filter === 'pullups';
 
   const [visibleCount, setVisibleCount] = useState<number>(() => {
@@ -111,6 +117,7 @@ export function HistoryPage() {
   const [deleteConfirm, setDeleteConfirm] = useState<
     | { type: 'selected' | 'all' }
     | { type: 'single-run'; run: CardioLog }
+    | { type: 'single-jump-rope'; entry: CardioLog }
     | { type: 'single-pullup'; session: StandalonePullupSession }
     | null
   >(null);
@@ -129,7 +136,8 @@ export function HistoryPage() {
         pullupRepo.getStandalonePullupSessions(),
       ]);
       setSessions(allSessions.filter((s) => s.timeEnd !== null));
-      setRuns(allRuns);
+      setRuns(allRuns.filter((entry) => entry.type === 'treadmill_3km'));
+      setJumpRopes(allRuns.filter((entry) => entry.type === 'jump_rope'));
       setPullups(allPullups);
     } catch (err) {
       console.error('Failed to load history:', err);
@@ -166,12 +174,16 @@ export function HistoryPage() {
   // Counter (number + word) for the current mode
   const headerCount = isRunningMode
     ? runs.length
+    : isJumpRopeMode
+      ? jumpRopes.length
     : isPullupMode
       ? pullups.length
       : filteredSessions.length;
 
   const headerLabel = isRunningMode
     ? pluralize(runs.length, 'пробежка', 'пробежки', 'пробежек')
+    : isJumpRopeMode
+      ? `${pluralize(jumpRopes.length, 'тренировка', 'тренировки', 'тренировок')} со скакалкой`
     : isPullupMode
       ? `${pluralize(pullups.length, 'тренировка', 'тренировки', 'тренировок')} на турнике`
       : pluralize(filteredSessions.length, 'тренировка', 'тренировки', 'тренировок');
@@ -182,6 +194,10 @@ export function HistoryPage() {
     [filteredSessions, visibleCount]
   );
   const visibleRuns = useMemo(() => runs.slice(0, visibleCount), [runs, visibleCount]);
+  const visibleJumpRopes = useMemo(
+    () => jumpRopes.slice(0, visibleCount),
+    [jumpRopes, visibleCount]
+  );
   const visiblePullups = useMemo(
     () => pullups.slice(0, visibleCount),
     [pullups, visibleCount]
@@ -189,6 +205,8 @@ export function HistoryPage() {
 
   const totalInMode = isRunningMode
     ? runs.length
+    : isJumpRopeMode
+      ? jumpRopes.length
     : isPullupMode
       ? pullups.length
       : filteredSessions.length;
@@ -203,6 +221,10 @@ export function HistoryPage() {
   const groupedRuns = useMemo(
     () => groupByMonth(visibleRuns, (r) => r.date ?? ''),
     [visibleRuns]
+  );
+  const groupedJumpRopes = useMemo(
+    () => groupByMonth(visibleJumpRopes, (entry) => entry.date ?? ''),
+    [visibleJumpRopes]
   );
   const groupedPullups = useMemo(
     () => groupByMonth(visiblePullups, (p) => p.date),
@@ -282,9 +304,10 @@ export function HistoryPage() {
   // ids of all items in the current mode (pullups use their group key `date`)
   const allIdsInMode: string[] = useMemo(() => {
     if (isRunningMode) return runs.map((r) => r.id);
+    if (isJumpRopeMode) return jumpRopes.map((entry) => entry.id);
     if (isPullupMode) return pullups.map((p) => p.date);
     return filteredSessions.map((s) => s.id);
-  }, [isRunningMode, isPullupMode, runs, pullups, filteredSessions]);
+  }, [isRunningMode, isJumpRopeMode, isPullupMode, runs, jumpRopes, pullups, filteredSessions]);
 
   function toggleSelectAll() {
     const allSelected =
@@ -372,6 +395,42 @@ export function HistoryPage() {
     }
   }
 
+  // --- Deletion: jump rope ---
+
+  async function deleteJumpRope(entry: CardioLog) {
+    try {
+      await workoutRepo.deleteCardioLogById(entry.id);
+      setDeleteConfirm(null);
+      await loadAll();
+    } catch (err) {
+      console.error('Failed to delete jump rope entry:', err);
+    }
+  }
+
+  async function handleDeleteSelectedJumpRopes() {
+    const ids = Array.from(selectedIds);
+    if (ids.length === 0) return;
+    try {
+      await workoutRepo.deleteCardioLogsByIds(ids);
+      setDeleteConfirm(null);
+      exitSelectionMode();
+      await loadAll();
+    } catch (err) {
+      console.error('Failed to delete jump rope entries:', err);
+    }
+  }
+
+  async function handleDeleteAllJumpRopes() {
+    try {
+      await workoutRepo.deleteCardioLogsByIds(jumpRopes.map((entry) => entry.id));
+      setDeleteConfirm(null);
+      exitSelectionMode();
+      await loadAll();
+    } catch (err) {
+      console.error('Failed to delete all jump rope entries:', err);
+    }
+  }
+
   // --- Deletion: pullups ---
 
   async function deletePullup(session: StandalonePullupSession) {
@@ -418,12 +477,14 @@ export function HistoryPage() {
 
   function confirmSelected() {
     if (isRunningMode) return handleDeleteSelectedRuns();
+    if (isJumpRopeMode) return handleDeleteSelectedJumpRopes();
     if (isPullupMode) return handleDeleteSelectedPullups();
     return handleDeleteSelectedStrength();
   }
 
   function confirmAll() {
     if (isRunningMode) return handleDeleteAllRuns();
+    if (isJumpRopeMode) return handleDeleteAllJumpRopes();
     if (isPullupMode) return handleDeleteAllPullups();
     return handleDeleteAllStrength();
   }
@@ -437,6 +498,8 @@ export function HistoryPage() {
 
   const totalAllCount = isRunningMode
     ? runs.length
+    : isJumpRopeMode
+      ? jumpRopes.length
     : isPullupMode
       ? pullups.length
       : sessions.length;
@@ -450,6 +513,8 @@ export function HistoryPage() {
   // Item noun for confirm modals (per mode)
   const deleteNoun = isRunningMode
     ? { one: 'пробежка будет удалена', few: 'пробежки будут удалены', many: 'пробежек будут удалены' }
+    : isJumpRopeMode
+      ? { one: 'тренировка будет удалена', few: 'тренировки будут удалены', many: 'тренировок будут удалены' }
     : { one: 'тренировка будет удалена', few: 'тренировки будут удалены', many: 'тренировок будут удалены' };
 
   return (
@@ -515,6 +580,7 @@ export function HistoryPage() {
             if (typeof opt.value === 'number') accentColor = getDayTypeColor(opt.value);
             else if (opt.value === 'pullups') accentColor = PULLUP_ACCENT;
             else if (opt.value === 'running') accentColor = RUNNING_ACCENT;
+            else if (opt.value === 'jump-rope') accentColor = JUMP_ROPE_ACCENT;
 
             return (
               <button
@@ -545,6 +611,8 @@ export function HistoryPage() {
           <div className="flex flex-col items-center justify-center py-20">
             {isRunningMode ? (
               <Footprints size={48} className="text-[#333333] mb-3" />
+            ) : isJumpRopeMode ? (
+              <RotateCcw size={48} className="text-[#333333] mb-3" />
             ) : isPullupMode ? (
               <Activity size={48} className="text-[#333333] mb-3" />
             ) : (
@@ -553,6 +621,8 @@ export function HistoryPage() {
             <p className="text-[#707070] text-sm">
               {isRunningMode
                 ? 'Нет пробежек'
+                : isJumpRopeMode
+                  ? 'Нет тренировок со скакалкой'
                 : isPullupMode
                   ? 'Нет тренировок на турнике'
                   : 'Нет тренировок'}
@@ -602,6 +672,28 @@ export function HistoryPage() {
                         isSelected={selectedIds.has(run.id)}
                         onToggle={() => toggleId(run.id)}
                         onDelete={() => setDeleteConfirm({ type: 'single-run', run })}
+                      />
+                    ))}
+                  </div>
+                </div>
+              ))}
+
+            {/* Jump rope */}
+            {isJumpRopeMode &&
+              groupedJumpRopes.map((group) => (
+                <div key={group.key}>
+                  <h2 className="text-sm font-semibold text-[#707070] uppercase tracking-wide mb-2">
+                    {group.label}
+                  </h2>
+                  <div className="flex flex-col gap-2.5">
+                    {group.items.map((entry) => (
+                      <JumpRopeCard
+                        key={entry.id}
+                        entry={entry}
+                        isSelecting={isSelecting}
+                        isSelected={selectedIds.has(entry.id)}
+                        onToggle={() => toggleId(entry.id)}
+                        onDelete={() => setDeleteConfirm({ type: 'single-jump-rope', entry })}
                       />
                     ))}
                   </div>
@@ -720,6 +812,21 @@ export function HistoryPage() {
         cancelText="Отмена"
         onConfirm={() => {
           if (deleteConfirm?.type === 'single-run') deleteRun(deleteConfirm.run);
+        }}
+        onCancel={() => setDeleteConfirm(null)}
+      />
+
+      {/* Confirm: single pullup */}
+      <ConfirmModal
+        isOpen={deleteConfirm?.type === 'single-jump-rope'}
+        title="Удалить тренировку со скакалкой?"
+        message="Эта тренировка со скакалкой будет удалена навсегда."
+        confirmText="Удалить"
+        cancelText="Отмена"
+        onConfirm={() => {
+          if (deleteConfirm?.type === 'single-jump-rope') {
+            deleteJumpRope(deleteConfirm.entry);
+          }
         }}
         onCancel={() => setDeleteConfirm(null)}
       />

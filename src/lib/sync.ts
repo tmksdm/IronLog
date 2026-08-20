@@ -65,7 +65,8 @@ interface SupabaseExerciseLog {
 interface SupabaseCardioLog {
   id: string;
   user_id: string;
-  workout_session_id: string;
+  workout_session_id: string | null;
+  date: string;
   type: string;
   duration_seconds: number | null;
   count: number | null;
@@ -219,6 +220,7 @@ export async function pushToCloud(): Promise<void> {
         id: c.id,
         user_id: userId,
         workout_session_id: c.workout_session_id,
+        date: c.date,
         type: c.type,
         duration_seconds: c.duration_seconds,
         count: c.count,

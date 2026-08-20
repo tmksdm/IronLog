@@ -8,7 +8,7 @@ import { DayTypeCard, StartWorkoutModal, RestoreWorkoutModal } from '../componen
 import { Button, LoadingScreen } from '../components/ui';
 import type { WorkoutSession, DayTypeId } from '../types';
 import { workoutRepo, workoutStateRepo } from '../db';
-import { Dumbbell, Footprints, ArrowUpToLine } from 'lucide-react';
+import { Dumbbell, Footprints, ArrowUpToLine, RotateCcw } from 'lucide-react';
 
 export function HomePage() {
   const {
@@ -124,6 +124,13 @@ export function HomePage() {
 
         {/* Secondary "by mood" activities — NOT in bottom nav */}
         <div className="flex gap-3 mt-3">
+          <button
+            onClick={() => navigate('/jump-rope')}
+            className="flex-1 flex flex-col items-center justify-center gap-1.5 py-4 rounded-xl bg-[#1E1E1E] border border-[#333333] text-[#B0B0B0] active:bg-[#2A2A2A] transition-colors"
+          >
+            <RotateCcw size={22} />
+            <span className="text-sm font-semibold">Скакалка</span>
+          </button>
           <button
             onClick={() => navigate('/pullups')}
             className="flex-1 flex flex-col items-center justify-center gap-1.5 py-4 rounded-xl bg-[#1E1E1E] border border-[#333333] text-[#B0B0B0] active:bg-[#2A2A2A] transition-colors"

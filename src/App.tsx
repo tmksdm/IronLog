@@ -26,10 +26,11 @@ import { SettingsPage } from './pages/SettingsPage';
 import { ExerciseEditorPage } from './pages/ExerciseEditorPage';
 import { RunningPage } from './pages/RunningPage';
 import { PullupsPage } from './pages/PullupsPage';
+import { JumpRopePage } from './pages/JumpRopePage';
 import { startUpdateChecker } from './utils/updateChecker';
 
 /** Pages where the bottom nav should be hidden */
-const HIDDEN_NAV_PATHS = ['/workout', '/summary', '/running', '/pullups'];
+const HIDDEN_NAV_PATHS = ['/workout', '/summary', '/running', '/pullups', '/jump-rope'];
 
 function shouldShowNav(pathname: string): boolean {
   return !HIDDEN_NAV_PATHS.some((p) => pathname.startsWith(p));
@@ -102,6 +103,7 @@ function AppContent() {
         <Route path="/exercises" element={<ExerciseEditorPage />} />
         <Route path="/running" element={<RunningPage />} />
         <Route path="/pullups" element={<PullupsPage />} />        
+        <Route path="/jump-rope" element={<JumpRopePage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
 

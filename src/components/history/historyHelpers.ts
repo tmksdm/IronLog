@@ -64,3 +64,4 @@ export function pluralize(n: number, one: string, few: string, many: string): st
 /** Accent colors for standalone modes */
 export const PULLUP_ACCENT = '#FF9800';
 export const RUNNING_ACCENT = '#03A9F4';
+export const JUMP_ROPE_ACCENT = '#AB47BC';
