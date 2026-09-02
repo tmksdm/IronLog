@@ -101,12 +101,10 @@ export async function rollbackProgressionForAllSessions(): Promise<void> {
  * Only rolls back if the deleted entry is the most recent run result
  * (across BOTH standalone and in-workout cardio).
  * `cardioLogId` is the id of the deleted cardio_logs row.
- * `entryDate` is its `date` value.
  * Call BEFORE deleting from DB.
  */
 export async function rollbackStandaloneRun(
-  cardioLogId: string,
-  _entryDate: string
+  cardioLogId: string
 ): Promise<void> {
   const db = await getDb();
 

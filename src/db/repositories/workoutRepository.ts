@@ -13,7 +13,7 @@ import type {
   SetType,
   CardioType,
 } from '../../types';
-import { deleteSessionFromCloud, deleteAllSessionsFromCloud, deleteMultipleSessionsFromCloud } from '../../lib/sync';
+import { flushPendingCloudDeletions, queueCloudDeletion } from '../../lib/sync';
 
 
 // --- Session row mapping ---
@@ -201,13 +201,14 @@ export async function getAllSessions(
  */
 export async function deleteWorkoutSession(sessionId: string): Promise<void> {
   const db = await getDb();
+  await queueCloudDeletion('session', sessionId);
   await db.run('DELETE FROM cardio_logs WHERE workout_session_id = ?', [sessionId]);
   await db.run('DELETE FROM pullup_logs WHERE workout_session_id = ?', [sessionId]);  
   await db.run('DELETE FROM exercise_logs WHERE workout_session_id = ?', [sessionId]);
   await db.run('DELETE FROM workout_sessions WHERE id = ?', [sessionId]);
   await saveToStore();
   // Sync deletion to cloud
-  deleteSessionFromCloud(sessionId).catch((err) =>
+  flushPendingCloudDeletions().catch((err) =>
     console.error('Cloud sync after session delete failed:', err)
   );
 }
@@ -218,6 +219,9 @@ export async function deleteWorkoutSession(sessionId: string): Promise<void> {
 export async function deleteMultipleSessions(sessionIds: string[]): Promise<void> {
   if (sessionIds.length === 0) return;
   const db = await getDb();
+  for (const sessionId of sessionIds) {
+    await queueCloudDeletion('session', sessionId);
+  }
   const placeholders = sessionIds.map(() => '?').join(',');
 
   await db.run(`DELETE FROM cardio_logs WHERE workout_session_id IN (${placeholders})`, sessionIds);
@@ -227,7 +231,7 @@ export async function deleteMultipleSessions(sessionIds: string[]): Promise<void
   await saveToStore();
 
   // Sync deletions to cloud (batch, not one-by-one)
-  deleteMultipleSessionsFromCloud(sessionIds).catch((err) =>
+  flushPendingCloudDeletions().catch((err) =>
     console.error('Cloud sync after batch delete failed:', err)
   );
 }
@@ -237,14 +241,15 @@ export async function deleteMultipleSessions(sessionIds: string[]): Promise<void
  */
 export async function deleteAllSessions(): Promise<void> {
   const db = await getDb();
-  await db.run('DELETE FROM cardio_logs');
-  await db.run('DELETE FROM pullup_logs');  
+  await queueCloudDeletion('all_sessions', '*');
+  await db.run('DELETE FROM cardio_logs WHERE workout_session_id IS NOT NULL');
+  await db.run('DELETE FROM pullup_logs WHERE workout_session_id IS NOT NULL');
   await db.run('DELETE FROM exercise_logs');
   await db.run('DELETE FROM workout_sessions');
   await saveToStore();
 
   // Sync deletion to cloud
-  deleteAllSessionsFromCloud().catch((err) =>
+  flushPendingCloudDeletions().catch((err) =>
     console.error('Cloud sync after delete-all failed:', err)
   );
 }
@@ -490,11 +495,11 @@ export async function getStandaloneCardioLogs(): Promise<CardioLog[]> {
  */
 export async function deleteCardioLogById(id: string): Promise<void> {
   const db = await getDb();
+  await queueCloudDeletion('cardio_log', id);
   await db.run('DELETE FROM cardio_logs WHERE id = ?', [id]);
   await saveToStore();
 
-  const { deleteCardioLogFromCloud } = await import('../../lib/sync');
-  deleteCardioLogFromCloud(id).catch((err) =>
+  flushPendingCloudDeletions().catch((err) =>
     console.error('Cloud sync after standalone cardio delete failed:', err)
   );
 }
@@ -506,17 +511,16 @@ export async function deleteCardioLogById(id: string): Promise<void> {
 export async function deleteCardioLogsByIds(ids: string[]): Promise<void> {
   if (ids.length === 0) return;
   const db = await getDb();
+  for (const id of ids) {
+    await queueCloudDeletion('cardio_log', id);
+  }
   const placeholders = ids.map(() => '?').join(',');
   await db.run(`DELETE FROM cardio_logs WHERE id IN (${placeholders})`, ids);
   await saveToStore();
 
-  const { deleteCardioLogFromCloud } = await import('../../lib/sync');
-  // Cloud helper deletes one id at a time; fire them all (best-effort).
-  for (const id of ids) {
-    deleteCardioLogFromCloud(id).catch((err) =>
-      console.error('Cloud sync after standalone cardio batch delete failed:', err)
-    );
-  }
+  flushPendingCloudDeletions().catch((err) =>
+    console.error('Cloud sync after standalone cardio batch delete failed:', err)
+  );
 }
 
 

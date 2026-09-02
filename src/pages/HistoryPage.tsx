@@ -356,7 +356,7 @@ export function HistoryPage() {
 
   async function deleteRun(run: CardioLog) {
     try {
-      await rollbackStandaloneRun(run.id, run.date ?? '');
+      await rollbackStandaloneRun(run.id);
       await workoutRepo.deleteCardioLogById(run.id);
       setDeleteConfirm(null);
       await loadAll();
@@ -371,7 +371,7 @@ export function HistoryPage() {
     try {
       for (const id of ids) {
         const run = runs.find((r) => r.id === id);
-        if (run) await rollbackStandaloneRun(run.id, run.date ?? '');
+        if (run) await rollbackStandaloneRun(run.id);
       }
       await workoutRepo.deleteCardioLogsByIds(ids);
       setDeleteConfirm(null);
@@ -385,7 +385,7 @@ export function HistoryPage() {
   async function handleDeleteAllRuns() {
     try {
       const ids = runs.map((r) => r.id);
-      for (const r of runs) await rollbackStandaloneRun(r.id, r.date ?? '');
+      for (const r of runs) await rollbackStandaloneRun(r.id);
       await workoutRepo.deleteCardioLogsByIds(ids);
       setDeleteConfirm(null);
       exitSelectionMode();

@@ -35,16 +35,42 @@ export function RestTimer() {
   const stopRestTimer = useWorkoutStore((s) => s.stopRestTimer);
   const startRestTimer = useWorkoutStore((s) => s.startRestTimer);
 
+  if (!isRunning) return null;
+
+  return (
+    <RunningRestTimer
+      seconds={seconds}
+      defaultSeconds={defaultSeconds}
+      tickRestTimer={tickRestTimer}
+      stopRestTimer={stopRestTimer}
+      startRestTimer={startRestTimer}
+    />
+  );
+}
+
+interface RunningRestTimerProps {
+  seconds: number;
+  defaultSeconds: number;
+  tickRestTimer: () => void;
+  stopRestTimer: () => void;
+  startRestTimer: () => void;
+}
+
+function RunningRestTimer({
+  seconds,
+  defaultSeconds,
+  tickRestTimer,
+  stopRestTimer,
+  startRestTimer,
+}: RunningRestTimerProps) {
   const [isExpanded, setIsExpanded] = useState(true);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Tick the timer every second
   useEffect(() => {
-    if (isRunning) {
-      intervalRef.current = setInterval(() => {
-        tickRestTimer();
-      }, 1000);
-    }
+    intervalRef.current = setInterval(() => {
+      tickRestTimer();
+    }, 1000);
 
     return () => {
       if (intervalRef.current) {
@@ -52,14 +78,7 @@ export function RestTimer() {
         intervalRef.current = null;
       }
     };
-  }, [isRunning, tickRestTimer]);
-
-  // Auto-expand when timer starts
-  useEffect(() => {
-    if (isRunning && seconds === defaultSeconds) {
-      setIsExpanded(true);
-    }
-  }, [isRunning, seconds, defaultSeconds]);
+  }, [tickRestTimer]);
 
   const handleClose = useCallback(() => {
     stopRestTimer();
@@ -73,8 +92,6 @@ export function RestTimer() {
   const handleToggle = useCallback(() => {
     setIsExpanded((prev) => !prev);
   }, []);
-
-  if (!isRunning) return null;
 
   const progress = seconds / defaultSeconds;
   const strokeDashoffset = RING_CIRCUMFERENCE * (1 - progress);

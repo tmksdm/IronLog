@@ -5,6 +5,7 @@
 import { getDb, generateId, saveToStore } from '../database';
 import type { PullupLog, MonthlyPullups, YearlyPullups, StandalonePullupSession } from '../../types';
 import type { PullupSetResult, PullupDayNumber } from '../../utils/pullupProgram';
+import { flushPendingCloudDeletions, queueCloudDeletion } from '../../lib/sync';
 
 // ---- Row mapping ----
 
@@ -189,12 +190,14 @@ export async function getStandalonePullupSessions(): Promise<StandalonePullupSes
 export async function deletePullupLogsByIds(ids: string[]): Promise<void> {
   if (ids.length === 0) return;
   const db = await getDb();
+  for (const id of ids) {
+    await queueCloudDeletion('pullup_log', id);
+  }
   const placeholders = ids.map(() => '?').join(',');
   await db.run(`DELETE FROM pullup_logs WHERE id IN (${placeholders})`, ids);
   await saveToStore();
 
-  const { deletePullupLogsFromCloud } = await import('../../lib/sync');
-  deletePullupLogsFromCloud(ids).catch((err) =>
+  flushPendingCloudDeletions().catch((err) =>
     console.error('Cloud sync after standalone pullup delete failed:', err)
   );
 }

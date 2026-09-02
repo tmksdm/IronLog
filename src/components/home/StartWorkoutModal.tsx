@@ -1,6 +1,6 @@
 // src/components/home/StartWorkoutModal.tsx
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import type { DayType, Direction, WorkoutSession } from '../../types';
 import { Modal } from '../ui/Modal';
 import { Button } from '../ui/Button';
@@ -26,20 +26,29 @@ export function StartWorkoutModal({
   direction,
   lastSession,
 }: StartWorkoutModalProps) {
-  // Initialize weight from last session's weightBefore or weightAfter
-  const defaultWeight =
-    lastSession?.weightAfter ?? lastSession?.weightBefore ?? 80;
+  return (
+    <Modal isOpen={isOpen} onClose={onClose} title="Начать тренировку">
+      {isOpen && (
+        <StartWorkoutModalContent
+          onStart={onStart}
+          dayType={dayType}
+          direction={direction}
+          lastSession={lastSession}
+        />
+      )}
+    </Modal>
+  );
+}
 
-  const [weight, setWeight] = useState<number>(defaultWeight);
-
-  // Reset weight when modal opens
-  useEffect(() => {
-    if (isOpen) {
-      setWeight(
-        lastSession?.weightAfter ?? lastSession?.weightBefore ?? 80
-      );
-    }
-  }, [isOpen, lastSession]);
+function StartWorkoutModalContent({
+  onStart,
+  dayType,
+  direction,
+  lastSession,
+}: Pick<StartWorkoutModalProps, 'onStart' | 'dayType' | 'direction' | 'lastSession'>) {
+  const [weight, setWeight] = useState(
+    () => lastSession?.weightAfter ?? lastSession?.weightBefore ?? 80
+  );
 
   const accentColor = getDayTypeColor(dayType.id);
 
@@ -48,8 +57,7 @@ export function StartWorkoutModal({
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Начать тренировку">
-      <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-6">
         {/* Day type + direction info */}
         <div className="flex items-center justify-center gap-3 py-3 bg-[#252525] rounded-xl">
           <span className="text-xl font-bold" style={{ color: accentColor }}>
@@ -93,7 +101,6 @@ export function StartWorkoutModal({
         >
           Начать
         </Button>
-      </div>
-    </Modal>
+    </div>
   );
 }

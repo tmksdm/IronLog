@@ -37,34 +37,41 @@ export function WorkoutHeader({
   postFinish = false,
 }: WorkoutHeaderProps) {
   const accentColor = getDayTypeColor(session.dayTypeId);
-  const [elapsed, setElapsed] = useState('0:00');
+  const startTime = new Date(session.timeStart).getTime();
+  const [elapsed, setElapsed] = useState(() =>
+    formatElapsed(Math.max(0, Math.floor((Date.now() - startTime) / 1000)))
+  );
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
-    const startTime = new Date(session.timeStart).getTime();
-
+    const effectStartTime = new Date(session.timeStart).getTime();
     // If timeEnd is already set, show fixed duration and don't tick
-    if (session.timeEnd) {
-      const endTime = new Date(session.timeEnd).getTime();
-      const diffSec = Math.max(0, Math.floor((endTime - startTime) / 1000));
-      setElapsed(formatElapsed(diffSec));
-      return;
-    }
+    if (session.timeEnd) return;
 
     // Otherwise, tick every second
     const updateElapsed = () => {
       const now = Date.now();
-      const diffSec = Math.floor((now - startTime) / 1000);
+      const diffSec = Math.floor((now - effectStartTime) / 1000);
       setElapsed(formatElapsed(diffSec));
     };
 
-    updateElapsed();
     intervalRef.current = setInterval(updateElapsed, 1000);
 
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
   }, [session.timeStart, session.timeEnd]);
+
+  const displayedElapsed = session.timeEnd
+    ? formatElapsed(
+        Math.max(
+          0,
+          Math.floor(
+            (new Date(session.timeEnd).getTime() - new Date(session.timeStart).getTime()) / 1000
+          )
+        )
+      )
+    : elapsed;
 
   const directionLabel = session.direction === 'normal' ? '→' : '←';
   const progressPercent = exercisesTotal > 0
@@ -81,7 +88,7 @@ export function WorkoutHeader({
           </h1>
           <span className="text-[#707070] text-lg">{directionLabel}</span>
           <span className={`text-sm font-mono ${session.timeEnd ? 'text-[#4CAF50]' : 'text-[#B0B0B0]'}`}>
-            {elapsed}
+            {displayedElapsed}
           </span>
         </div>
 

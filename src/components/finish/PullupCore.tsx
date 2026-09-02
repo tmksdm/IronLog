@@ -30,6 +30,7 @@ import {
 } from '../../utils/pullupProgram';
 import type { PullupStepResult, PullupInProgressState } from '../../types';
 import { Check, SkipForward, ChevronRight, X, RotateCcw } from 'lucide-react';
+import { buildInitialPullupState } from './pullupState';
 
 // Fallback grip list for safety
 const DAY3_GRIPS_DEFAULT: GripType[] = [
@@ -37,6 +38,19 @@ const DAY3_GRIPS_DEFAULT: GripType[] = [
   'reverse', 'reverse', 'reverse',
   'wide', 'wide', 'wide',
 ];
+
+function finishRest(prev: PullupInProgressState): PullupInProgressState {
+  const cleared = {
+    ...prev,
+    isResting: false,
+    restSecondsLeft: 0,
+    restSecondsTotal: 0,
+  };
+  if (prev.plan.effectiveDay === 2 && !prev.ladderFinalSet) {
+    return { ...cleared, currentSetIndex: (prev.currentSetIndex || 1) + 1 };
+  }
+  return cleared;
+}
 
 interface PullupCoreProps {
   /** Restore from a saved snapshot (crash resilience). If null, a fresh plan is built. */
@@ -47,32 +61,6 @@ interface PullupCoreProps {
   onComplete: (result: PullupStepResult) => void;
   /** Called when the session is skipped. */
   onSkip: (result: PullupStepResult) => void;
-}
-
-// ---- Helper ----
-
-export function buildInitialPullupState(): PullupInProgressState {
-  const programState = loadPullupProgram();
-  const plan = buildDayPlan(programState);
-  return {
-    plan: {
-      dayNumber: plan.dayNumber,
-      effectiveDay: plan.effectiveDay,
-      day5ActualDay: plan.day5ActualDay,
-      targetReps: plan.targetReps,
-      grips: plan.grips,
-      plannedSets: plan.plannedSets,
-      restSeconds: plan.restSeconds,
-    },
-    started: false,
-    completedSets: [],
-    currentSetIndex: 0,
-    ladderFailed: false,
-    ladderFinalSet: false,
-    isResting: false,
-    restSecondsLeft: 0,
-    restSecondsTotal: 0,
-  };
 }
 
 // ---- Local Rest Timer (self-contained, not the global one) ----
@@ -150,13 +138,12 @@ function LocalRestTimer({
 // ---- Day 1: Max Reps ----
 
 function Day1Max({
-  stateRef,
+  state,
   onRecordSet,
 }: {
-  stateRef: React.MutableRefObject<PullupInProgressState>;
+  state: PullupInProgressState;
   onRecordSet: (reps: number, succeeded: boolean, targetReps: number | null) => void;
 }) {
-  const state = stateRef.current;
   const TOTAL_SETS = state.plan.plannedSets ?? 5;
   const sets = state.completedSets;
   const currentSet = sets.length + 1;
@@ -219,19 +206,18 @@ function Day1Max({
 // ---- Day 2: Ladder ----
 
 function Day2Ladder({
-  stateRef,
+  state,
   onLadderSuccess,
   onLadderFailStart,
   onLadderFailConfirm,
   onLadderFinalConfirm,
 }: {
-  stateRef: React.MutableRefObject<PullupInProgressState>;
+  state: PullupInProgressState;
   onLadderSuccess: () => void;
   onLadderFailStart: () => void;
   onLadderFailConfirm: (reps: number) => void;
   onLadderFinalConfirm: (reps: number) => void;
 }) {
-  const state = stateRef.current;
   const sets = state.completedSets;
   const currentStep = state.currentSetIndex || 1;
   const failed = state.ladderFailed;
@@ -350,13 +336,12 @@ function Day2Ladder({
 // ---- Day 3/4: Grip Sets ----
 
 function Day34Grips({
-  stateRef,
+  state,
   onRecordGrip,
 }: {
-  stateRef: React.MutableRefObject<PullupInProgressState>;
+  state: PullupInProgressState;
   onRecordGrip: (succeeded: boolean) => void;
 }) {
-  const state = stateRef.current;
   const totalSets = state.plan.plannedSets ?? 9;
   const grips = state.plan.grips ?? DAY3_GRIPS_DEFAULT;
   const target = state.plan.targetReps ?? 4;
@@ -447,7 +432,10 @@ function PullupCore({
 
   // Keep a ref so child callbacks always read the latest state
   const stateRef = useRef<PullupInProgressState>(state);
-  stateRef.current = state;
+
+  useEffect(() => {
+    stateRef.current = state;
+  }, [state]);
 
   // Report state changes upward for crash-resilience persist
   useEffect(() => {
@@ -469,22 +457,6 @@ function PullupCore({
     }, 1000);
     return () => clearInterval(interval);
   }, [state.isResting]);
-
-  // Transition out of rest: advance to the next actionable step.
-  function finishRest(prev: PullupInProgressState): PullupInProgressState {
-    const cleared = {
-      ...prev,
-      isResting: false,
-      restSecondsLeft: 0,
-      restSecondsTotal: 0,
-    };
-    if (prev.plan.effectiveDay === 2 && !prev.ladderFinalSet) {
-      // Ladder normal step rest done  advance ladder step
-      return { ...cleared, currentSetIndex: (prev.currentSetIndex || 1) + 1 };
-    }
-    // Days 1/3/4 and ladder finalSet: currentSetIndex already advanced where needed
-    return cleared;
-  }
 
   // ---- Start / Skip ----
 
@@ -742,11 +714,11 @@ function PullupCore({
       </h3>
 
       {plan.effectiveDay === 1 && (
-        <Day1Max stateRef={stateRef} onRecordSet={(reps) => handleDay1Record(reps)} />
+        <Day1Max state={state} onRecordSet={(reps) => handleDay1Record(reps)} />
       )}
       {plan.effectiveDay === 2 && (
         <Day2Ladder
-          stateRef={stateRef}
+          state={state}
           onLadderSuccess={handleLadderSuccess}
           onLadderFailStart={handleLadderFailStart}
           onLadderFailConfirm={handleLadderFailConfirm}
@@ -754,7 +726,7 @@ function PullupCore({
         />
       )}
       {(plan.effectiveDay === 3 || plan.effectiveDay === 4) && (
-        <Day34Grips stateRef={stateRef} onRecordGrip={handleGripRecord} />
+        <Day34Grips state={state} onRecordGrip={handleGripRecord} />
       )}
     </div>
   );

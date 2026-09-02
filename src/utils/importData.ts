@@ -291,10 +291,6 @@ export async function restoreFromBackup(data: BackupData): Promise<void> {
       }
     }
 
-  } catch (error) {
-    // If anything fails, the data may be partially inserted.
-    // Re-throw so the caller can inform the user.
-    throw error;
   } finally {
     await db.execute('PRAGMA foreign_keys = ON;');
     await saveToStore();

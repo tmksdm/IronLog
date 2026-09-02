@@ -7,6 +7,7 @@
 
 import { supabase } from './supabase';
 import { getDb, saveToStore } from '../db/database';
+import { hasMeaningfulLocalData, isCloudBackupEmpty } from './syncPolicy';
 
 // ==========================================
 // Types for Supabase rows (snake_case + user_id)
@@ -66,7 +67,7 @@ interface SupabaseCardioLog {
   id: string;
   user_id: string;
   workout_session_id: string | null;
-  date: string;
+  date: string | null;
   type: string;
   duration_seconds: number | null;
   count: number | null;
@@ -76,7 +77,8 @@ interface SupabaseCardioLog {
 interface SupabasePullupLog {
   id: string;
   user_id: string;
-  workout_session_id: string;
+  workout_session_id: string | null;
+  date: string | null;
   pullup_day: number;
   effective_day: number;
   set_number: number;
@@ -115,6 +117,8 @@ export async function pushToCloud(): Promise<void> {
   const db = await getDb();
 
   try {
+    await flushPendingCloudDeletions();
+
     // 1. Push exercises
     const exercisesResult = await db.query(
       'SELECT * FROM exercises ORDER BY day_type_id, sort_order'
@@ -247,6 +251,7 @@ export async function pushToCloud(): Promise<void> {
           id: p.id,
           user_id: userId,
           workout_session_id: p.workout_session_id,
+          date: p.date,
           pullup_day: p.pullup_day,
           effective_day: p.effective_day,
           set_number: p.set_number,
@@ -291,20 +296,31 @@ export async function pullFromCloud(): Promise<boolean> {
     return false;
   }
 
-  // Check if local database already has REAL user data.
-  // Seed exercises (default 21 rows with fixed 'seed-' ids) are inserted on every
-  // fresh DB init, so their presence does NOT mean the device has real data.
-  // The honest "new device / reinstall" signal is: no workout sessions AND no
-  // user-created (non-seed) exercises.
-  const db = await getDb();
-  const localSessionCount = await db.query('SELECT COUNT(*) as cnt FROM workout_sessions');
-  const localUserExCount = await db.query(
-    "SELECT COUNT(*) as cnt FROM exercises WHERE id NOT LIKE 'seed-%'"
-  );
-  const hasLocalSessions = (localSessionCount.values?.[0]?.cnt ?? 0) > 0;
-  const hasUserExercises = (localUserExCount.values?.[0]?.cnt ?? 0) > 0;
+  // Never restore stale cloud rows over deletions made while offline.
+  await flushPendingCloudDeletions();
 
-  if (hasLocalSessions || hasUserExercises) {
+  const db = await getDb();
+  const countQueries = await Promise.all([
+    db.query('SELECT COUNT(*) as cnt FROM workout_sessions'),
+    db.query("SELECT COUNT(*) as cnt FROM exercises WHERE id NOT LIKE 'seed-%'"),
+    db.query('SELECT COUNT(*) as cnt FROM cardio_logs'),
+    db.query('SELECT COUNT(*) as cnt FROM pullup_logs'),
+    db.query('SELECT COUNT(*) as cnt FROM active_workout_state'),
+    db.query('SELECT COUNT(*) as cnt FROM pullup_active_state'),
+    db.query('SELECT COUNT(*) as cnt FROM cloud_delete_queue'),
+  ]);
+  const countAt = (index: number) => Number(countQueries[index]?.values?.[0]?.cnt ?? 0);
+  const hasLocalData = hasMeaningfulLocalData({
+    workoutSessions: countAt(0),
+    userExercises: countAt(1),
+    cardioLogs: countAt(2),
+    pullupLogs: countAt(3),
+    activeWorkouts: countAt(4),
+    activePullups: countAt(5),
+    pendingDeletes: countAt(6),
+  });
+
+  if (hasLocalData) {
     console.log('pullFromCloud: real local data exists, skipping (local is authoritative)');
     return false;
   }
@@ -335,7 +351,13 @@ export async function pullFromCloud(): Promise<boolean> {
     const pullups = pullupRes.data ?? [];
 
     // If cloud is also empty, nothing to do
-    if (exercises.length === 0 && sessions.length === 0) {
+    if (isCloudBackupEmpty({
+      exercises: exercises.length,
+      workoutSessions: sessions.length,
+      exerciseLogs: logs.length,
+      cardioLogs: cardio.length,
+      pullupLogs: pullups.length,
+    })) {
       console.log('pullFromCloud: cloud is also empty, nothing to pull');
       return false;
     }
@@ -467,48 +489,110 @@ export async function pullFromCloud(): Promise<boolean> {
 // DELETE helpers (for workout deletion sync)
 // ==========================================
 
+export type CloudDeletionType =
+  | 'session'
+  | 'all_sessions'
+  | 'exercise'
+  | 'cardio_log'
+  | 'pullup_log';
+
+interface CloudDeletionRow {
+  entity_type: CloudDeletionType;
+  entity_id: string;
+}
+
+export async function queueCloudDeletion(
+  entityType: CloudDeletionType,
+  entityId: string
+): Promise<void> {
+  const db = await getDb();
+  await db.run(
+    `INSERT OR IGNORE INTO cloud_delete_queue (entity_type, entity_id, created_at)
+     VALUES (?, ?, ?)`,
+    [entityType, entityId, new Date().toISOString()]
+  );
+  await saveToStore();
+}
+
+export async function flushPendingCloudDeletions(): Promise<number> {
+  const userId = await getUserId();
+  if (!userId) return 0;
+
+  const db = await getDb();
+  const result = await db.query(
+    'SELECT entity_type, entity_id FROM cloud_delete_queue ORDER BY created_at'
+  );
+  const pending = (result.values ?? []) as CloudDeletionRow[];
+  let completed = 0;
+
+  for (const item of pending) {
+    switch (item.entity_type) {
+      case 'session':
+        await deleteSessionFromCloud(item.entity_id);
+        break;
+      case 'all_sessions':
+        await deleteAllSessionsFromCloud();
+        break;
+      case 'exercise':
+        await deleteExerciseFromCloud(item.entity_id);
+        break;
+      case 'cardio_log':
+        await deleteCardioLogFromCloud(item.entity_id);
+        break;
+      case 'pullup_log':
+        await deletePullupLogsFromCloud([item.entity_id]);
+        break;
+    }
+
+    await db.run(
+      'DELETE FROM cloud_delete_queue WHERE entity_type = ? AND entity_id = ?',
+      [item.entity_type, item.entity_id]
+    );
+    completed += 1;
+  }
+
+  if (completed > 0) await saveToStore();
+  return completed;
+}
+
 /**
  * Delete a workout session and its logs from Supabase.
  */
 export async function deleteSessionFromCloud(sessionId: string): Promise<void> {
   const userId = await getUserId();
-  if (!userId) return;
+  if (!userId) throw new Error('Cannot delete cloud session without an authenticated user');
 
-  try {
-    // Delete pullup_logs for this session
-    const { error: pullupError } = await supabase
+  // Delete pullup_logs for this session
+  const { error: pullupError } = await supabase
       .from('pullup_logs')
       .delete()
       .eq('workout_session_id', sessionId)
       .eq('user_id', userId);
-    if (pullupError) console.error('deleteSessionFromCloud pullup_logs error:', pullupError.message);
+  if (pullupError) throw pullupError;
 
-    // Delete cardio_logs for this session
-    const { error: cardioError } = await supabase
+  // Delete cardio_logs for this session
+  const { error: cardioError } = await supabase
       .from('cardio_logs')
       .delete()
       .eq('workout_session_id', sessionId)
       .eq('user_id', userId);
-    if (cardioError) console.error('deleteSessionFromCloud cardio_logs error:', cardioError.message);
+  if (cardioError) throw cardioError;
 
-    // Delete exercise_logs for this session
-    const { error: logsError } = await supabase
+  // Delete exercise_logs for this session
+  const { error: logsError } = await supabase
       .from('exercise_logs')
       .delete()
       .eq('workout_session_id', sessionId)
       .eq('user_id', userId);
-    if (logsError) console.error('deleteSessionFromCloud exercise_logs error:', logsError.message);
+  if (logsError) throw logsError;
 
-    // Delete the session itself
-    const { error } = await supabase
+  // Delete the session itself
+  const { error } = await supabase
       .from('workout_sessions')
       .delete()
       .eq('id', sessionId)
       .eq('user_id', userId);
-    if (error) console.error('deleteSessionFromCloud error:', error.message);
-  } catch (error) {
-    console.error('deleteSessionFromCloud error:', error);
-  }
+  if (error) throw error;
 }
 
 /**
@@ -516,27 +600,24 @@ export async function deleteSessionFromCloud(sessionId: string): Promise<void> {
  */
 export async function deleteExerciseFromCloud(exerciseId: string): Promise<void> {
   const userId = await getUserId();
-  if (!userId) return;
+  if (!userId) throw new Error('Cannot delete cloud exercise without an authenticated user');
 
-  try {
-    // First delete exercise_logs for this exercise
-    await supabase
+  // First delete exercise_logs for this exercise
+  const { error: logsError } = await supabase
       .from('exercise_logs')
       .delete()
       .eq('exercise_id', exerciseId)
       .eq('user_id', userId);
+  if (logsError) throw logsError;
 
-    // Then delete the exercise itself
-    const { error } = await supabase
+  // Then delete the exercise itself
+  const { error } = await supabase
       .from('exercises')
       .delete()
       .eq('id', exerciseId)
       .eq('user_id', userId);
 
-    if (error) console.error('deleteExerciseFromCloud error:', error.message);
-  } catch (error) {
-    console.error('deleteExerciseFromCloud error:', error);
-  }
+  if (error) throw error;
 }
 
 /**
@@ -544,41 +625,37 @@ export async function deleteExerciseFromCloud(exerciseId: string): Promise<void>
  */
 export async function deleteAllSessionsFromCloud(): Promise<void> {
   const userId = await getUserId();
-  if (!userId) return;
+  if (!userId) throw new Error('Cannot delete cloud sessions without an authenticated user');
 
-  try {
     // Delete all pullup_logs for this user
     const { error: pullupError } = await supabase
       .from('pullup_logs')
       .delete()
+      .not('workout_session_id', 'is', null)
       .eq('user_id', userId);
-    if (pullupError) console.error('deleteAllSessionsFromCloud pullup_logs error:', pullupError.message);
+    if (pullupError) throw pullupError;
 
     // Delete all cardio_logs for this user
     const { error: cardioError } = await supabase
       .from('cardio_logs')
       .delete()
+      .not('workout_session_id', 'is', null)
       .eq('user_id', userId);
-    if (cardioError) console.error('deleteAllSessionsFromCloud cardio_logs error:', cardioError.message);
+    if (cardioError) throw cardioError;
 
     // Delete all exercise_logs for this user
     const { error: logsError } = await supabase
       .from('exercise_logs')
       .delete()
       .eq('user_id', userId);
-    if (logsError) console.error('deleteAllSessionsFromCloud exercise_logs error:', logsError.message);
+    if (logsError) throw logsError;
 
     // Delete all workout_sessions for this user
     const { error: sessionsError } = await supabase
       .from('workout_sessions')
       .delete()
       .eq('user_id', userId);
-    if (sessionsError) console.error('deleteAllSessionsFromCloud sessions error:', sessionsError.message);
-
-    console.log('deleteAllSessionsFromCloud: success');
-  } catch (error) {
-    console.error('deleteAllSessionsFromCloud error:', error);
-  }
+    if (sessionsError) throw sessionsError;
 }
 
 /**
@@ -586,16 +663,16 @@ export async function deleteAllSessionsFromCloud(): Promise<void> {
  */
 export async function deleteMultipleSessionsFromCloud(sessionIds: string[]): Promise<void> {
   const userId = await getUserId();
-  if (!userId || sessionIds.length === 0) return;
+  if (sessionIds.length === 0) return;
+  if (!userId) throw new Error('Cannot delete cloud sessions without an authenticated user');
 
-  try {
     // Delete pullup_logs
     const { error: pullupError } = await supabase
       .from('pullup_logs')
       .delete()
       .in('workout_session_id', sessionIds)
       .eq('user_id', userId);
-    if (pullupError) console.error('deleteMultipleSessionsFromCloud pullup error:', pullupError.message);
+    if (pullupError) throw pullupError;
 
     // Delete cardio_logs
     const { error: cardioError } = await supabase
@@ -603,7 +680,7 @@ export async function deleteMultipleSessionsFromCloud(sessionIds: string[]): Pro
       .delete()
       .in('workout_session_id', sessionIds)
       .eq('user_id', userId);
-    if (cardioError) console.error('deleteMultipleSessionsFromCloud cardio error:', cardioError.message);
+    if (cardioError) throw cardioError;
 
     // Delete exercise_logs
     const { error: logsError } = await supabase
@@ -611,7 +688,7 @@ export async function deleteMultipleSessionsFromCloud(sessionIds: string[]): Pro
       .delete()
       .in('workout_session_id', sessionIds)
       .eq('user_id', userId);
-    if (logsError) console.error('deleteMultipleSessionsFromCloud logs error:', logsError.message);
+    if (logsError) throw logsError;
 
     // Delete sessions
     const { error: sessionsError } = await supabase
@@ -619,12 +696,7 @@ export async function deleteMultipleSessionsFromCloud(sessionIds: string[]): Pro
       .delete()
       .in('id', sessionIds)
       .eq('user_id', userId);
-    if (sessionsError) console.error('deleteMultipleSessionsFromCloud sessions error:', sessionsError.message);
-
-    console.log(`deleteMultipleSessionsFromCloud: deleted ${sessionIds.length} sessions`);
-  } catch (error) {
-    console.error('deleteMultipleSessionsFromCloud error:', error);
-  }
+    if (sessionsError) throw sessionsError;
 }
 
 
@@ -637,18 +709,14 @@ export async function deleteMultipleSessionsFromCloud(sessionIds: string[]): Pro
  */
 export async function deleteCardioLogFromCloud(cardioLogId: string): Promise<void> {
   const userId = await getUserId();
-  if (!userId) return;
+  if (!userId) throw new Error('Cannot delete cloud cardio log without an authenticated user');
 
-  try {
     const { error } = await supabase
       .from('cardio_logs')
       .delete()
       .eq('id', cardioLogId)
       .eq('user_id', userId);
-    if (error) console.error('deleteCardioLogFromCloud error:', error.message);
-  } catch (error) {
-    console.error('deleteCardioLogFromCloud error:', error);
-  }
+    if (error) throw error;
 }
 
 /**
@@ -657,17 +725,14 @@ export async function deleteCardioLogFromCloud(cardioLogId: string): Promise<voi
  */
 export async function deletePullupLogsFromCloud(pullupLogIds: string[]): Promise<void> {
   const userId = await getUserId();
-  if (!userId || pullupLogIds.length === 0) return;
+  if (pullupLogIds.length === 0) return;
+  if (!userId) throw new Error('Cannot delete cloud pull-up logs without an authenticated user');
 
-  try {
     const { error } = await supabase
       .from('pullup_logs')
       .delete()
       .in('id', pullupLogIds)
       .eq('user_id', userId);
-    if (error) console.error('deletePullupLogsFromCloud error:', error.message);
-  } catch (error) {
-    console.error('deletePullupLogsFromCloud error:', error);
-  }
+    if (error) throw error;
 }
 

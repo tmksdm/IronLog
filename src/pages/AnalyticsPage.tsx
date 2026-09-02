@@ -340,20 +340,24 @@ function TonnageTab() {
   const [yearly, setYearly] = useState<YearlyTonnage[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const load = useCallback(async (f: DayTypeFilter) => {
-    const dtId = f === 'all' ? undefined : f;
-    const [m, y] = await Promise.all([
-      getMonthlyTonnage(dtId),
-      getYearlyTonnage(dtId),
-    ]);
-    setMonthly(m);
-    setYearly(y);
-  }, []);
-
   useEffect(() => {
+    let cancelled = false;
+    const dtId = filter === 'all' ? undefined : filter;
+    Promise.all([getMonthlyTonnage(dtId), getYearlyTonnage(dtId)]).then(([m, y]) => {
+      if (cancelled) return;
+      setMonthly(m);
+      setYearly(y);
+      setLoading(false);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [filter]);
+
+  const changeFilter = (nextFilter: DayTypeFilter) => {
     setLoading(true);
-    load(filter).finally(() => setLoading(false));
-  }, [filter, load]);
+    setFilter(nextFilter);
+  };
 
   const filterColor =
     filter === 'all' ? colors.primary : getDayTypeColor(filter as number);
@@ -377,7 +381,7 @@ function TonnageTab() {
           return (
             <button
               key={String(opt.key)}
-              onClick={() => setFilter(opt.key)}
+              onClick={() => changeFilter(opt.key)}
               className="px-3 py-1.5 rounded-full text-sm font-semibold border transition-colors"
               style={{
                 backgroundColor: isActive ? chipColor + '30' : colors.surface,

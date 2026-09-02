@@ -19,5 +19,10 @@ export default defineConfig([
       ecmaVersion: 2020,
       globals: globals.browser,
     },
+    rules: {
+      // SQLite and Supabase return dynamically shaped rows at repository boundaries.
+      // The domain-facing mapper functions remain strongly typed by TypeScript.
+      '@typescript-eslint/no-explicit-any': 'off',
+    },
   },
 ])

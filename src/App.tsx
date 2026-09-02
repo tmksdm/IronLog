@@ -9,7 +9,7 @@
  * onAuthStateChange handles token refresh / expiry in the background.
  */
 
-import { useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import { HashRouter, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { supabase } from './lib/supabase';
 import { useAppStore } from './stores/appStore';
@@ -17,17 +17,38 @@ import { LoadingScreen, UpdateBanner } from './components/ui';
 import { BottomNav } from './components/layout';
 import { LoginPage } from './pages/LoginPage';
 import { HomePage } from './pages/HomePage';
-import { ActiveWorkoutPage } from './pages/ActiveWorkoutPage';
-import { WorkoutSummaryPage } from './pages/WorkoutSummaryPage';
-import { HistoryPage } from './pages/HistoryPage';
-import { WorkoutDetailPage } from './pages/WorkoutDetailPage';
-import { AnalyticsPage } from './pages/AnalyticsPage';
-import { SettingsPage } from './pages/SettingsPage';
-import { ExerciseEditorPage } from './pages/ExerciseEditorPage';
-import { RunningPage } from './pages/RunningPage';
-import { PullupsPage } from './pages/PullupsPage';
-import { JumpRopePage } from './pages/JumpRopePage';
 import { startUpdateChecker } from './utils/updateChecker';
+
+const ActiveWorkoutPage = lazy(() =>
+  import('./pages/ActiveWorkoutPage').then((module) => ({ default: module.ActiveWorkoutPage }))
+);
+const WorkoutSummaryPage = lazy(() =>
+  import('./pages/WorkoutSummaryPage').then((module) => ({ default: module.WorkoutSummaryPage }))
+);
+const HistoryPage = lazy(() =>
+  import('./pages/HistoryPage').then((module) => ({ default: module.HistoryPage }))
+);
+const WorkoutDetailPage = lazy(() =>
+  import('./pages/WorkoutDetailPage').then((module) => ({ default: module.WorkoutDetailPage }))
+);
+const AnalyticsPage = lazy(() =>
+  import('./pages/AnalyticsPage').then((module) => ({ default: module.AnalyticsPage }))
+);
+const SettingsPage = lazy(() =>
+  import('./pages/SettingsPage').then((module) => ({ default: module.SettingsPage }))
+);
+const ExerciseEditorPage = lazy(() =>
+  import('./pages/ExerciseEditorPage').then((module) => ({ default: module.ExerciseEditorPage }))
+);
+const RunningPage = lazy(() =>
+  import('./pages/RunningPage').then((module) => ({ default: module.RunningPage }))
+);
+const PullupsPage = lazy(() =>
+  import('./pages/PullupsPage').then((module) => ({ default: module.PullupsPage }))
+);
+const JumpRopePage = lazy(() =>
+  import('./pages/JumpRopePage').then((module) => ({ default: module.JumpRopePage }))
+);
 
 /** Pages where the bottom nav should be hidden */
 const HIDDEN_NAV_PATHS = ['/workout', '/summary', '/running', '/pullups', '/jump-rope'];
@@ -92,20 +113,22 @@ function AppContent() {
 
   return (
     <div className="mx-auto max-w-120 min-h-screen">
-      <Routes>
-        <Route path="/" element={<HomePage />} />
-        <Route path="/workout" element={<ActiveWorkoutPage />} />
-        <Route path="/summary/:sessionId" element={<WorkoutSummaryPage />} />
-        <Route path="/history" element={<HistoryPage />} />
-        <Route path="/detail/:sessionId" element={<WorkoutDetailPage />} />
-        <Route path="/analytics" element={<AnalyticsPage />} />
-        <Route path="/settings" element={<SettingsPage />} />
-        <Route path="/exercises" element={<ExerciseEditorPage />} />
-        <Route path="/running" element={<RunningPage />} />
-        <Route path="/pullups" element={<PullupsPage />} />        
-        <Route path="/jump-rope" element={<JumpRopePage />} />
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
+      <Suspense fallback={<LoadingScreen />}>
+        <Routes>
+          <Route path="/" element={<HomePage />} />
+          <Route path="/workout" element={<ActiveWorkoutPage />} />
+          <Route path="/summary/:sessionId" element={<WorkoutSummaryPage />} />
+          <Route path="/history" element={<HistoryPage />} />
+          <Route path="/detail/:sessionId" element={<WorkoutDetailPage />} />
+          <Route path="/analytics" element={<AnalyticsPage />} />
+          <Route path="/settings" element={<SettingsPage />} />
+          <Route path="/exercises" element={<ExerciseEditorPage />} />
+          <Route path="/running" element={<RunningPage />} />
+          <Route path="/pullups" element={<PullupsPage />} />
+          <Route path="/jump-rope" element={<JumpRopePage />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </Suspense>
 
       {showNav && <BottomNav />}
     </div>

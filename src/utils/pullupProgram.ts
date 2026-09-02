@@ -396,7 +396,7 @@ export function reverseDayResult(
   // Reverse day advancement: current day was advanced AFTER the result,
   // so we need to go back. currentDay is where we ARE now (next day).
   // The day that was completed = previous day in cycle.
-  let prevDay: PullupDayNumber = ((((state.currentDay - 1) - 1 + 5) % 5) + 1) as PullupDayNumber;
+  const prevDay: PullupDayNumber = ((((state.currentDay - 1) - 1 + 5) % 5) + 1) as PullupDayNumber;
   let prevDay5Rotation = state.day5Rotation;
 
   // If the completed day was day 5, day5Rotation was advanced too

@@ -101,6 +101,13 @@ export const CREATE_TABLES_SQL = `
     updated_at TEXT NOT NULL
   );
 
+  CREATE TABLE IF NOT EXISTS cloud_delete_queue (
+    entity_type TEXT NOT NULL,
+    entity_id TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    PRIMARY KEY (entity_type, entity_id)
+  );
+
   CREATE INDEX IF NOT EXISTS idx_exercises_day_type
     ON exercises(day_type_id);
   CREATE INDEX IF NOT EXISTS idx_workout_sessions_day_type

@@ -234,7 +234,7 @@ async function buildCSVForDayType(
 
   // Header row 2: labels
   const headerRow2: string[] = ['Упражнение', 'Раб. вес'];
-  for (const _session of sessions) {
+  for (let index = 0; index < sessions.length; index += 1) {
     headerRow2.push('Р1', 'Р2', 'Р3');
   }
 

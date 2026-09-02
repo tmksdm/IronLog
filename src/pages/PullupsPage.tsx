@@ -35,7 +35,6 @@ export function PullupsPage() {
   const [restoreState, setRestoreState] = useState<PullupInProgressState | null>(null);
   const [coreInitial, setCoreInitial] = useState<PullupInProgressState | null>(null);
   const [result, setResult] = useState<PullupStepResult | null>(null);
-  const [isSaving, setIsSaving] = useState(false);
 
   // Guard so the persist effect doesn't overwrite the snapshot before restore decision
   const savingRef = useRef(false);
@@ -101,11 +100,10 @@ export function PullupsPage() {
   const saveSession = useCallback(
     async (res: PullupStepResult) => {
       // Guard against double-invocation: savingRef is synchronous (set immediately),
-      // unlike the isSaving state which updates on the next render. The setTimeout
-      // in PullupCore can fire onComplete more than once before isSaving flips.
+      // unlike React state, which updates on the next render. The setTimeout in
+      // PullupCore can fire onComplete more than once before a render occurs.
       if (savingRef.current) return;
       savingRef.current = true;
-      setIsSaving(true);
       try {
         // Standalone entry: no workout session, date = now.
         await pullupRepo.savePullupSession({
@@ -141,10 +139,9 @@ export function PullupsPage() {
       } catch (err) {
         console.error('Failed to save standalone pullups:', err);
         savingRef.current = false;
-        setIsSaving(false);
       }
     },
-    [isSaving]
+    []
   );
 
   const handleComplete = useCallback(

@@ -61,6 +61,19 @@ export default defineConfig(({ mode }) => {
     build: {
       outDir: 'dist',
       emptyOutDir: true,
+      rollupOptions: {
+        output: {
+          manualChunks: {
+            'react-vendor': ['react', 'react-dom', 'react-router-dom'],
+            'supabase-vendor': ['@supabase/supabase-js'],
+            'sqlite-vendor': [
+              '@capacitor-community/sqlite',
+              'jeep-sqlite',
+              'sql.js',
+            ],
+          },
+        },
+      },
     },
     optimizeDeps: {
       exclude: ['jeep-sqlite', '@capacitor-community/sqlite'],
