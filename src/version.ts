@@ -5,7 +5,7 @@
  * Update this file with each release.
  */
 
-export const APP_VERSION = '0.24.0';
+export const APP_VERSION = '0.24.1';
 
 export interface ChangelogEntry {
   version: string;
@@ -14,6 +14,16 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+
+  {
+    version: '0.24.1',
+    date: '2026-09-04',
+    changes: [
+      'Устранён пустой экран и конфликт переходов после завершения тренировки.',
+      'Во время финального сохранения теперь отображается понятный экран загрузки.',
+      'При непредвиденной ошибке интерфейса показывается экран безопасного перезапуска вместо чёрного экрана.',
+    ],
+  },
 
   {
     version: '0.24.0',

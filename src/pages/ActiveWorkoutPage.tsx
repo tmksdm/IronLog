@@ -23,6 +23,7 @@ import {
   ConfirmModal,
   ExercisesReview,
 } from '../components/workout';
+import { LoadingScreen } from '../components/ui';
 import FinishSummary from '../components/workout/FinishSummary';
 
 export function ActiveWorkoutPage() {
@@ -58,12 +59,13 @@ export function ActiveWorkoutPage() {
   const exerciseRefs = useRef<Map<number, HTMLDivElement>>(new Map());
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
-  // Redirect to home if no active workout
+  // Redirect to home if no active workout. While the final save is in
+  // progress, the page owns navigation to the summary and must not race it.
   useEffect(() => {
-    if (!isActive || !session) {
+    if ((!isActive || !session) && !isSaving) {
       navigate('/', { replace: true });
     }
-  }, [isActive, session, navigate]);
+  }, [isActive, session, isSaving, navigate]);
 
   // ---- Active workout handlers ----
 
@@ -188,6 +190,9 @@ export function ActiveWorkoutPage() {
 
   // ===== EARLY RETURN (all hooks above) =====
 
+  // finishWorkout marks the workout inactive before the summary navigation.
+  // Keep a visible transition instead of briefly rendering the app background.
+  if (isSaving && (!session || !isActive)) return <LoadingScreen />;
   if (!session || !isActive) return null;
 
   const exercisesDone = exercises.filter((e) => e.status === 'completed').length;
