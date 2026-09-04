@@ -185,6 +185,20 @@ export interface YearlyRunTime {
   runCount: number;
 }
 
+export interface MonthlyJumpRope {
+  year: number;
+  month: number;
+  label: string;
+  avgCount: number;
+  sessionCount: number;
+}
+
+export interface YearlyJumpRope {
+  year: number;
+  avgCount: number;
+  sessionCount: number;
+}
+
 export interface ExerciseProgressPoint {
   date: string;
   sessionId: string;
@@ -244,13 +258,13 @@ export interface MonthlyPullups {
   year: number;
   month: number;
   label: string;
-  totalReps: number;
+  avgReps: number;
   sessionCount: number;
 }
 
 export interface YearlyPullups {
   year: number;
-  totalReps: number;
+  avgReps: number;
   sessionCount: number;
 }
 

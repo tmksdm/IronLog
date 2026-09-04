@@ -15,6 +15,8 @@ import type {
   YearlyDuration,
   MonthlyRunTime,
   YearlyRunTime,
+  MonthlyJumpRope,
+  YearlyJumpRope,
   ExerciseProgressPoint,
   ExercisePickerItem,
 } from '../../types';
@@ -354,6 +356,60 @@ export async function getYearlyRunTime(): Promise<YearlyRunTime[]> {
     year: row.year,
     avgDurationSec: Math.round(row.avg_duration_sec),
     runCount: row.run_count,
+  }));
+}
+
+
+// ==========================================
+// Jump rope
+// ==========================================
+
+export async function getMonthlyJumpRopeCount(): Promise<MonthlyJumpRope[]> {
+  const db = await getDb();
+  const result = await db.query(
+    `SELECT
+       CAST(strftime('%Y', date, 'localtime') AS INTEGER) as year,
+       CAST(strftime('%m', date, 'localtime') AS INTEGER) as month,
+       AVG(count) as avg_count,
+       COUNT(*) as session_count
+     FROM cardio_logs
+     WHERE type = 'jump_rope'
+       AND count IS NOT NULL
+       AND count > 0
+       AND date IS NOT NULL
+     GROUP BY year, month
+     ORDER BY year ASC, month ASC`
+  );
+
+  return (result.values ?? []).map((row: any) => ({
+    year: row.year,
+    month: row.month,
+    label: monthLabel(row.year, row.month),
+    avgCount: row.avg_count ?? 0,
+    sessionCount: row.session_count ?? 0,
+  }));
+}
+
+export async function getYearlyJumpRopeCount(): Promise<YearlyJumpRope[]> {
+  const db = await getDb();
+  const result = await db.query(
+    `SELECT
+       CAST(strftime('%Y', date, 'localtime') AS INTEGER) as year,
+       AVG(count) as avg_count,
+       COUNT(*) as session_count
+     FROM cardio_logs
+     WHERE type = 'jump_rope'
+       AND count IS NOT NULL
+       AND count > 0
+       AND date IS NOT NULL
+     GROUP BY year
+     ORDER BY year ASC`
+  );
+
+  return (result.values ?? []).map((row: any) => ({
+    year: row.year,
+    avgCount: row.avg_count ?? 0,
+    sessionCount: row.session_count ?? 0,
   }));
 }
 

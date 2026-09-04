@@ -5,7 +5,7 @@
  * Update this file with each release.
  */
 
-export const APP_VERSION = '0.26.4';
+export const APP_VERSION = '0.26.5';
 
 export interface ChangelogEntry {
   version: string;
@@ -14,6 +14,15 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+
+  {
+    version: '0.26.5',
+    date: '2026-09-04',
+    changes: [
+      'В статистике появилась отдельная вкладка скакалки со средним количеством прыжков за тренировку.',
+      'Статистика подтягиваний теперь показывает среднее количество повторов за тренировку и число тренировок за период.',
+    ],
+  },
 
   {
     version: '0.26.4',

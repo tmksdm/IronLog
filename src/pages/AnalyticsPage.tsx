@@ -1,7 +1,7 @@
 // src/pages/AnalyticsPage.tsx
 
 /**
- * Analytics page — 6 tabs: Тоннаж, Вес тела, Время, Бег, Подтягивания, Упражнение.
+ * Analytics page — strength and standalone activity statistics.
  * All metric tabs share the same layout: monthly chart + table, yearly chart + table.
  * Y-axis scales from actual minimum (not 0) for better data visibility.
  */
@@ -15,6 +15,7 @@ import {
   Dumbbell,
   BarChart3,
   ArrowUpFromLine,
+  Hash,
 } from 'lucide-react';
 import {
   LineChart,
@@ -36,6 +37,8 @@ import {
   getYearlyDuration,
   getMonthlyRunTime,
   getYearlyRunTime,
+  getMonthlyJumpRopeCount,
+  getYearlyJumpRopeCount,
   getExerciseProgress,
   getAllExercisesForPicker,
 } from '../db/repositories/analyticsRepository';
@@ -60,6 +63,8 @@ import type {
   YearlyDuration,
   MonthlyRunTime,
   YearlyRunTime,
+  MonthlyJumpRope,
+  YearlyJumpRope,
   MonthlyPullups,
   YearlyPullups,
   ExerciseProgressPoint,
@@ -70,13 +75,14 @@ import type {
 // Tab definitions
 // ==========================================
 
-type TabKey = 'tonnage' | 'bodyweight' | 'duration' | 'running' | 'pullups' | 'exercise';
+type TabKey = 'tonnage' | 'bodyweight' | 'duration' | 'running' | 'jump-rope' | 'pullups' | 'exercise';
 
 const TABS: { key: TabKey; label: string; Icon: React.FC<{ size?: number; className?: string }> }[] = [
   { key: 'tonnage', label: 'Тоннаж', Icon: Weight },
   { key: 'bodyweight', label: 'Вес тела', Icon: Scale },
   { key: 'duration', label: 'Время', Icon: Timer },
   { key: 'running', label: 'Бег', Icon: Footprints },
+  { key: 'jump-rope', label: 'Скакалка', Icon: Hash },
   { key: 'pullups', label: 'Подтягивания', Icon: ArrowUpFromLine },
   { key: 'exercise', label: 'Упражнение', Icon: Dumbbell },
 ];
@@ -677,6 +683,84 @@ function RunningTab() {
 }
 
 // ==========================================
+// Tab: Jump rope
+// ==========================================
+
+function JumpRopeTab() {
+  const [monthly, setMonthly] = useState<MonthlyJumpRope[]>([]);
+  const [yearly, setYearly] = useState<YearlyJumpRope[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    Promise.all([getMonthlyJumpRopeCount(), getYearlyJumpRopeCount()])
+      .then(([m, y]) => {
+        setMonthly(m);
+        setYearly(y);
+      })
+      .finally(() => setLoading(false));
+  }, []);
+
+  if (loading) return <LoadingSpinner />;
+
+  const monthly12 = buildLast12Months(monthly, (r) => r.avgCount);
+  const yearly12 = buildLast12Years(yearly, (r) => r.avgCount);
+
+  return (
+    <div className="flex flex-col gap-6">
+      <div className="flex flex-col gap-3">
+        <h3 className="text-base font-bold text-white">Скакалка — среднее за месяц</h3>
+        {monthly.length === 0 ? (
+          <EmptyState message="Нет данных о скакалке" />
+        ) : (
+          <>
+            <AnalyticsChart
+              data={monthly12}
+              lineColor="#AB47BC"
+              formatValue={(v) => `${formatDecimal(v)} прыж.`}
+            />
+            <StatTable
+              rows={monthly
+                .slice()
+                .reverse()
+                .map((m) => ({
+                  label: m.label,
+                  value: `${formatDecimal(m.avgCount)} прыж.`,
+                  sub: `${m.sessionCount} тренир.`,
+                }))}
+            />
+          </>
+        )}
+      </div>
+
+      <div className="flex flex-col gap-3">
+        <h3 className="text-base font-bold text-white">Скакалка — среднее за год</h3>
+        {yearly.length === 0 ? (
+          <EmptyState message="Нет данных о скакалке" />
+        ) : (
+          <>
+            <AnalyticsChart
+              data={yearly12}
+              lineColor="#AB47BC"
+              formatValue={(v) => `${formatDecimal(v)} прыж.`}
+            />
+            <StatTable
+              rows={yearly
+                .slice()
+                .reverse()
+                .map((y) => ({
+                  label: `${y.year}`,
+                  value: `${formatDecimal(y.avgCount)} прыж.`,
+                  sub: `${y.sessionCount} тренир.`,
+                }))}
+            />
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ==========================================
 // Tab: Подтягивания
 // ==========================================
 
@@ -696,13 +780,13 @@ function PullupsTab() {
 
   if (loading) return <LoadingSpinner />;
 
-  const monthly12 = buildLast12Months(monthly, (r) => r.totalReps);
-  const yearly12 = buildLast12Years(yearly, (r) => r.totalReps);
+  const monthly12 = buildLast12Months(monthly, (r) => r.avgReps);
+  const yearly12 = buildLast12Years(yearly, (r) => r.avgReps);
 
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-3">
-        <h3 className="text-base font-bold text-white">Сумма за месяц</h3>
+        <h3 className="text-base font-bold text-white">Среднее за тренировку по месяцам</h3>
         {monthly.length === 0 ? (
           <EmptyState message="Нет данных о подтягиваниях" />
         ) : (
@@ -710,7 +794,7 @@ function PullupsTab() {
             <AnalyticsChart
               data={monthly12}
               lineColor="#FF9800"
-              formatValue={(v) => `${Math.round(v)} повт.`}
+              formatValue={(v) => `${formatDecimal(v)} повт.`}
             />
             <StatTable
               rows={monthly
@@ -718,7 +802,7 @@ function PullupsTab() {
                 .reverse()
                 .map((m) => ({
                   label: m.label,
-                  value: `${m.totalReps} повт.`,
+                  value: `${formatDecimal(m.avgReps)} повт.`,
                   sub: `${m.sessionCount} тренир.`,
                 }))}
             />
@@ -727,7 +811,7 @@ function PullupsTab() {
       </div>
 
       <div className="flex flex-col gap-3">
-        <h3 className="text-base font-bold text-white">Сумма за год</h3>
+        <h3 className="text-base font-bold text-white">Среднее за тренировку по годам</h3>
         {yearly.length === 0 ? (
           <EmptyState message="Нет данных о подтягиваниях" />
         ) : (
@@ -735,7 +819,7 @@ function PullupsTab() {
             <AnalyticsChart
               data={yearly12}
               lineColor="#FF9800"
-              formatValue={(v) => `${Math.round(v)} повт.`}
+              formatValue={(v) => `${formatDecimal(v)} повт.`}
             />
             <StatTable
               rows={yearly
@@ -743,7 +827,7 @@ function PullupsTab() {
                 .reverse()
                 .map((y) => ({
                   label: `${y.year}`,
-                  value: `${y.totalReps} повт.`,
+                  value: `${formatDecimal(y.avgReps)} повт.`,
                   sub: `${y.sessionCount} тренир.`,
                 }))}
             />
@@ -1029,6 +1113,7 @@ export function AnalyticsPage() {
         {activeTab === 'bodyweight' && <BodyWeightTab />}
         {activeTab === 'duration' && <DurationTab />}
         {activeTab === 'running' && <RunningTab />}
+        {activeTab === 'jump-rope' && <JumpRopeTab />}
         {activeTab === 'pullups' && <PullupsTab />}
         {activeTab === 'exercise' && <ExerciseTab />}
       </div>

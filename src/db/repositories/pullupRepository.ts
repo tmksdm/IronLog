@@ -215,19 +215,30 @@ function monthLabel(year: number, month: number): string {
 }
 
 /**
- * Get monthly total pull-up reps (sum, not average — total per month).
+ * Get monthly average pull-up reps per session.
  * Uses 'localtime' modifier to group by device-local month, not UTC.
  */
 export async function getMonthlyPullups(): Promise<MonthlyPullups[]> {
   const db = await getDb();
   const result = await db.query(
     `SELECT
-       CAST(strftime('%Y', date, 'localtime') AS INTEGER) as year,
-       CAST(strftime('%m', date, 'localtime') AS INTEGER) as month,
-       SUM(reps) as total_reps,
-       COUNT(DISTINCT COALESCE(workout_session_id, id)) as session_count
-     FROM pullup_logs
-     WHERE skipped = 0 AND date IS NOT NULL
+       year,
+       month,
+       AVG(session_total_reps) as avg_reps,
+       COUNT(*) as session_count
+     FROM (
+       SELECT
+         CAST(strftime('%Y', date, 'localtime') AS INTEGER) as year,
+         CAST(strftime('%m', date, 'localtime') AS INTEGER) as month,
+         CASE
+           WHEN workout_session_id IS NOT NULL THEN 'workout:' || workout_session_id
+           ELSE 'standalone:' || date
+         END as session_key,
+         SUM(reps) as session_total_reps
+       FROM pullup_logs
+       WHERE skipped = 0 AND date IS NOT NULL
+       GROUP BY year, month, session_key
+     )
      GROUP BY year, month
      ORDER BY year ASC, month ASC`
   );
@@ -236,32 +247,42 @@ export async function getMonthlyPullups(): Promise<MonthlyPullups[]> {
     year: row.year,
     month: row.month,
     label: monthLabel(row.year, row.month),
-    totalReps: row.total_reps ?? 0,
+    avgReps: row.avg_reps ?? 0,
     sessionCount: row.session_count ?? 0,
   }));
 }
 
 
 /**
- * Get yearly total pull-up reps.
+ * Get yearly average pull-up reps per session.
  * Uses 'localtime' modifier to group by device-local year, not UTC.
  */
 export async function getYearlyPullups(): Promise<YearlyPullups[]> {
   const db = await getDb();
   const result = await db.query(
     `SELECT
-       CAST(strftime('%Y', date, 'localtime') AS INTEGER) as year,
-       SUM(reps) as total_reps,
-       COUNT(DISTINCT COALESCE(workout_session_id, id)) as session_count
-     FROM pullup_logs
-     WHERE skipped = 0 AND date IS NOT NULL
+       year,
+       AVG(session_total_reps) as avg_reps,
+       COUNT(*) as session_count
+     FROM (
+       SELECT
+         CAST(strftime('%Y', date, 'localtime') AS INTEGER) as year,
+         CASE
+           WHEN workout_session_id IS NOT NULL THEN 'workout:' || workout_session_id
+           ELSE 'standalone:' || date
+         END as session_key,
+         SUM(reps) as session_total_reps
+       FROM pullup_logs
+       WHERE skipped = 0 AND date IS NOT NULL
+       GROUP BY year, session_key
+     )
      GROUP BY year
      ORDER BY year ASC`
   );
 
   return (result.values ?? []).map((row: any) => ({
     year: row.year,
-    totalReps: row.total_reps ?? 0,
+    avgReps: row.avg_reps ?? 0,
     sessionCount: row.session_count ?? 0,
   }));
 }
