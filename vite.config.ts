@@ -57,7 +57,8 @@ function listBuildFiles(directory: string, root = directory): string[] {
   });
 }
 
-// Generate a versioned app shell. A new worker waits until the user accepts it.
+// Generate a versioned app shell. Updates activate automatically so even a
+// client with a broken UI can recover without pressing an in-app button.
 function controlledUpdateServiceWorkerPlugin(base: string) {
   return {
     name: 'controlled-update-service-worker',
@@ -73,7 +74,11 @@ const PRECACHE_URLS = ${JSON.stringify(files)};
 const APP_SHELL = ${JSON.stringify(`${base}index.html`)};
 
 self.addEventListener('install', (event) => {
-  event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(PRECACHE_URLS)));
+  event.waitUntil(
+    caches.open(CACHE_NAME)
+      .then((cache) => cache.addAll(PRECACHE_URLS))
+      .then(() => self.skipWaiting())
+  );
 });
 
 self.addEventListener('message', (event) => {
@@ -81,12 +86,13 @@ self.addEventListener('message', (event) => {
 });
 
 self.addEventListener('activate', (event) => {
-  event.waitUntil(
-    caches.keys()
-      .then((names) => Promise.all(names.filter((name) => name.startsWith('ironlog-') && name !== CACHE_NAME).map((name) => caches.delete(name))))
-      .then(() => self.clients.claim())
-  );
+  event.waitUntil(self.clients.claim());
 });
+
+function deleteOldCaches() {
+  return caches.keys()
+    .then((names) => Promise.all(names.filter((name) => name.startsWith('ironlog-') && name !== CACHE_NAME).map((name) => caches.delete(name))));
+}
 
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
@@ -94,7 +100,9 @@ self.addEventListener('fetch', (event) => {
   if (url.origin !== self.location.origin || url.pathname.endsWith('/version.json')) return;
 
   if (event.request.mode === 'navigate') {
-    event.respondWith(caches.match(APP_SHELL).then((cached) => cached || fetch(event.request)));
+    const response = caches.open(CACHE_NAME).then((cache) => cache.match(APP_SHELL)).then((cached) => cached || fetch(event.request));
+    event.respondWith(response);
+    event.waitUntil(response.then(() => deleteOldCaches()));
     return;
   }
 

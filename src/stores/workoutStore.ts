@@ -126,11 +126,13 @@ function buildSnapshot(state: WorkoutState): WorkoutSnapshot | null {
 // Queue to prevent concurrent SQLite transactions
 let persistPromise: Promise<void> = Promise.resolve();
 let pendingSnapshot: { sessionId: string; snapshot: WorkoutSnapshot } | null = null;
+const blockedPersistenceSessions = new Set<string>();
 
 function persistState(state: WorkoutState): void {
   if (state._isRestoring) return;
   const snapshot = buildSnapshot(state);
   if (!snapshot) return;
+  if (blockedPersistenceSessions.has(snapshot.session.id)) return;
 
   // Always overwrite pending — only the latest state matters
   pendingSnapshot = { sessionId: snapshot.session.id, snapshot };
@@ -146,6 +148,13 @@ function persistState(state: WorkoutState): void {
       console.error('Failed to persist workout state:', err);
     }
   });
+}
+
+async function drainAndBlockPersistence(sessionId: string): Promise<void> {
+  blockedPersistenceSessions.add(sessionId);
+  if (pendingSnapshot?.sessionId === sessionId) pendingSnapshot = null;
+  await persistPromise;
+  if (pendingSnapshot?.sessionId === sessionId) pendingSnapshot = null;
 }
 
 /**
@@ -278,6 +287,8 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
         onRestTimerFinish: null,
       });
 
+      blockedPersistenceSessions.delete(session.id);
+
       persistState(get());
     } catch (error) {
       console.error('Failed to start workout:', error);
@@ -345,6 +356,8 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
     if (!session) return null;
 
     try {
+      await drainAndBlockPersistence(session.id);
+
       for (const activeEx of state.exercises) {
         const isSkippedExercise =
           activeEx.status === 'skipped' ||
@@ -437,6 +450,8 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
       return finishedSession;
     } catch (error) {
       console.error('Failed to finish workout:', error);
+      blockedPersistenceSessions.delete(session.id);
+      persistState(get());
       return null;
     }
   },
@@ -447,6 +462,7 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
   cancelWorkout: async () => {
     const { session } = get();
     if (session?.id) {
+      await drainAndBlockPersistence(session.id);
       try {
         await workoutRepo.deleteWorkoutSession(session.id);
       } catch (error) {

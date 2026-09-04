@@ -34,6 +34,7 @@ export interface AppState {
   lastSession: WorkoutSession | null;
   isLoading: boolean;
   isInitialized: boolean;
+  initializationError: string | null;
 
   // --- Sync ---
   isSyncing: boolean;
@@ -58,14 +59,15 @@ export const useAppStore = create<AppState>((set, get) => ({
   lastSession: null,
   isLoading: false,
   isInitialized: false,
+  initializationError: null,
   isSyncing: false,
   lastSyncError: null,
   pendingRestore: null,
 
   initialize: async () => {
-    if (get().isInitialized) return;
+    if (get().isInitialized || get().isLoading) return;
 
-    set({ isLoading: true });
+    set({ isLoading: true, initializationError: null });
     try {
       // 1. Load from LOCAL data first — instant, no network
       const dayTypes = await dayTypeRepo.getAllDayTypes();
@@ -128,7 +130,12 @@ export const useAppStore = create<AppState>((set, get) => ({
         });
     } catch (error) {
       console.error('Failed to initialize app store:', error);
-      set({ isLoading: false });
+      set({
+        isLoading: false,
+        isInitialized: false,
+        initializationError:
+          error instanceof Error ? error.message : 'Неизвестная ошибка локальной базы',
+      });
     }
   },
 

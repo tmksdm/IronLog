@@ -1,8 +1,8 @@
 // src/utils/updateChecker.ts
 
 /**
- * Checks for app updates and stages new PWA assets without activating them.
- * The waiting service worker is activated only after explicit user consent.
+ * Checks for app updates. A newly installed worker activates automatically;
+ * controllerchange reloads the page so a broken screen cannot block recovery.
  */
 
 import { APP_VERSION } from '../version';
@@ -143,20 +143,21 @@ async function prepareUpdate(): Promise<boolean> {
   }
 }
 
-export function startUpdateChecker(
-  onUpdateAvailable: (update: Extract<UpdateStatus, { available: true }>) => void
-): () => void {
+export function startUpdateChecker(): () => void {
   let stopped = false;
 
-  // Install the first controlling worker even when this is already the latest release.
+  const reloadForNewWorker = () => {
+    if (!stopped) window.location.reload();
+  };
+  navigator.serviceWorker?.addEventListener('controllerchange', reloadForNewWorker);
+
+  // Registration itself can recover a client whose current UI cannot render.
   void ensureServiceWorkerRegistration();
 
   const doCheck = async () => {
     if (stopped) return;
     const result = await checkForUpdate();
-    if (result.available && await prepareUpdate()) {
-      onUpdateAvailable(result);
-    }
+    if (result.available) await prepareUpdate();
   };
 
   const initialTimeout = setTimeout(doCheck, 5000);
@@ -166,5 +167,6 @@ export function startUpdateChecker(
     stopped = true;
     clearTimeout(initialTimeout);
     clearInterval(interval);
+    navigator.serviceWorker?.removeEventListener('controllerchange', reloadForNewWorker);
   };
 }

@@ -5,7 +5,7 @@
  * Update this file with each release.
  */
 
-export const APP_VERSION = '0.26.3';
+export const APP_VERSION = '0.26.4';
 
 export interface ChangelogEntry {
   version: string;
@@ -14,6 +14,16 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+
+  {
+    version: '0.26.4',
+    date: '2026-09-04',
+    changes: [
+      'Обновления PWA снова применяются автоматически, поэтому сломанный экран больше не блокирует получение исправления.',
+      'Отмена тренировки дожидается автосохранения и не оставляет конфликтующее состояние локальной базы.',
+      'Ошибка открытия локальной базы показывает повторный запуск вместо бесконечной загрузки.',
+    ],
+  },
 
   {
     version: '0.26.3',

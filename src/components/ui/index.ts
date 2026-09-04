@@ -7,3 +7,4 @@ export { NumberStepper } from './NumberStepper';
 export { LoadingScreen } from './LoadingScreen';
 export { AppErrorBoundary } from './AppErrorBoundary';
 export { UpdatePrompt } from './UpdateBanner';
+export { StartupErrorScreen } from './StartupErrorScreen';

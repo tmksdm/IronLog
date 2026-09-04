@@ -9,17 +9,15 @@
  * onAuthStateChange handles token refresh / expiry in the background.
  */
 
-import { lazy, Suspense, useEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import { HashRouter, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { supabase } from './lib/supabase';
 import { useAppStore } from './stores/appStore';
-import { LoadingScreen, UpdatePrompt } from './components/ui';
+import { LoadingScreen, StartupErrorScreen } from './components/ui';
 import { BottomNav } from './components/layout';
 import { LoginPage } from './pages/LoginPage';
 import { HomePage } from './pages/HomePage';
-import { startUpdateChecker, type UpdateStatus } from './utils/updateChecker';
-
-type AvailableUpdate = Extract<UpdateStatus, { available: true }>;
+import { startUpdateChecker } from './utils/updateChecker';
 
 const ActiveWorkoutPage = lazy(() =>
   import('./pages/ActiveWorkoutPage').then((module) => ({ default: module.ActiveWorkoutPage }))
@@ -98,7 +96,7 @@ function hasLocalSupabaseSession(): boolean {
 }
 
 function AppContent() {
-  const { initialize, isInitialized, isLoading } = useAppStore();
+  const { initialize, isInitialized, isLoading, initializationError } = useAppStore();
   const location = useLocation();
 
   useRedirectOnLaunch();
@@ -108,6 +106,9 @@ function AppContent() {
   }, [initialize]);
 
   if (isLoading || !isInitialized) {
+    if (initializationError) {
+      return <StartupErrorScreen onRetry={() => void initialize()} />;
+    }
     return <LoadingScreen />;
   }
 
@@ -140,31 +141,11 @@ function AppContent() {
 function App() {
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [availableUpdate, setAvailableUpdate] = useState<AvailableUpdate | null>(null);
-  const skippedUpdateVersion = useRef<string | null>(null);
 
-  // Check for app updates (GitHub Pages / PWA)
+  // Keep the PWA shell current without requiring a working screen to confirm it.
   useEffect(() => {
-    const cleanup = startUpdateChecker((update) => {
-      if (update.remoteVersion !== skippedUpdateVersion.current) {
-        setAvailableUpdate(update);
-      }
-    });
-    return cleanup;
+    return startUpdateChecker();
   }, []);
-
-  const skipUpdate = () => {
-    skippedUpdateVersion.current = availableUpdate?.remoteVersion ?? null;
-    setAvailableUpdate(null);
-  };
-
-  const updatePrompt = availableUpdate ? (
-    <UpdatePrompt
-      remoteVersion={availableUpdate.remoteVersion}
-      changes={availableUpdate.changes}
-      onSkip={skipUpdate}
-    />
-  ) : null;
 
   useEffect(() => {
     // FAST PATH: check localStorage for cached token (instant, no network).
@@ -236,21 +217,13 @@ function App() {
   }
 
   if (!isAuthenticated) {
-    return (
-      <>
-        {updatePrompt}
-        <LoginPage onLoginSuccess={() => setIsAuthenticated(true)} />
-      </>
-    );
+    return <LoginPage onLoginSuccess={() => setIsAuthenticated(true)} />;
   }
 
   return (
-    <>
-      {updatePrompt}
-      <HashRouter>
-        <AppContent />
-      </HashRouter>
-    </>
+    <HashRouter>
+      <AppContent />
+    </HashRouter>
   );
 }
 
