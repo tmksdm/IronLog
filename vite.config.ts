@@ -7,14 +7,25 @@ import { fileURLToPath } from 'url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-// Read APP_VERSION from src/version.ts at build time
-function getAppVersion(): string {
+interface ReleaseMetadata {
+  version: string;
+  changes: string[];
+}
+
+// Read current release metadata from src/version.ts at build time
+function getReleaseMetadata(): ReleaseMetadata {
   try {
     const content = readFileSync(resolve(__dirname, 'src/version.ts'), 'utf-8');
     const match = content.match(/APP_VERSION\s*=\s*['"]([^'"]+)['"]/);
-    return match?.[1] ?? '0.0.0';
+    const version = match?.[1] ?? '0.0.0';
+    const entryStart = content.indexOf(`version: '${version}'`);
+    const changesStart = content.indexOf('changes: [', entryStart);
+    const changesEnd = content.indexOf(']', changesStart);
+    const changesBlock = content.slice(changesStart, changesEnd);
+    const changes = [...changesBlock.matchAll(/'([^']+)'/g)].map((item) => item[1]);
+    return { version, changes };
   } catch {
-    return '0.0.0';
+    return { version: '0.0.0', changes: [] };
   }
 }
 
@@ -23,12 +34,12 @@ function versionJsonPlugin() {
   return {
     name: 'generate-version-json',
     closeBundle() {
-      const version = getAppVersion();
+      const { version, changes } = getReleaseMetadata();
       const outDir = resolve(__dirname, 'dist');
       mkdirSync(outDir, { recursive: true });
       writeFileSync(
         resolve(outDir, 'version.json'),
-        JSON.stringify({ version, timestamp: Date.now() })
+        JSON.stringify({ version, changes, timestamp: Date.now() })
       );
       console.log(`✅ version.json generated: ${version}`);
     },

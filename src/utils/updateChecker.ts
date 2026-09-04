@@ -33,7 +33,7 @@ function getVersionUrl(): string {
 
 export type UpdateStatus =
   | { available: false }
-  | { available: true; remoteVersion: string };
+  | { available: true; remoteVersion: string; changes: string[] };
 
 /** Single check: fetch version.json and compare */
 export async function checkForUpdate(): Promise<UpdateStatus> {
@@ -46,8 +46,15 @@ export async function checkForUpdate(): Promise<UpdateStatus> {
     const remoteVersion = data?.version;
     if (typeof remoteVersion !== 'string') return { available: false };
 
+    const changes = Array.isArray(data?.changes)
+      ? data.changes.filter(
+          (change: unknown): change is string =>
+            typeof change === 'string' && change.trim().length > 0
+        )
+      : [];
+
     if (isNewer(remoteVersion, APP_VERSION)) {
-      return { available: true, remoteVersion };
+      return { available: true, remoteVersion, changes };
     }
 
     return { available: false };
@@ -58,23 +65,22 @@ export async function checkForUpdate(): Promise<UpdateStatus> {
 }
 
 /** Force reload bypassing cache */
-export function applyUpdate(): void {
-  // Clear any service worker caches if they exist
-  if ('caches' in window) {
-    caches.keys().then((names) => {
-      for (const name of names) {
-        caches.delete(name);
-      }
-    });
+export async function applyUpdate(): Promise<void> {
+  try {
+    // Clear any service worker caches if they exist
+    if ('caches' in window) {
+      const names = await caches.keys();
+      await Promise.all(names.map((name) => caches.delete(name)));
+    }
+  } finally {
+    // A cache API failure must not prevent the user-approved reload.
+    window.location.reload();
   }
-
-  // Hard reload — bypass browser cache
-  window.location.reload();
 }
 
 /** Start periodic checking. Returns a cleanup function. */
 export function startUpdateChecker(
-  onUpdateAvailable: (remoteVersion: string) => void
+  onUpdateAvailable: (update: Extract<UpdateStatus, { available: true }>) => void
 ): () => void {
   let stopped = false;
 
@@ -82,7 +88,7 @@ export function startUpdateChecker(
     if (stopped) return;
     const result = await checkForUpdate();
     if (result.available) {
-      onUpdateAvailable(result.remoteVersion);
+      onUpdateAvailable(result);
     }
   };
 

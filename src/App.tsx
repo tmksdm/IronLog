@@ -9,15 +9,17 @@
  * onAuthStateChange handles token refresh / expiry in the background.
  */
 
-import { lazy, Suspense, useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { HashRouter, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { supabase } from './lib/supabase';
 import { useAppStore } from './stores/appStore';
-import { LoadingScreen, UpdateBanner } from './components/ui';
+import { LoadingScreen, UpdatePrompt } from './components/ui';
 import { BottomNav } from './components/layout';
 import { LoginPage } from './pages/LoginPage';
 import { HomePage } from './pages/HomePage';
-import { startUpdateChecker } from './utils/updateChecker';
+import { startUpdateChecker, type UpdateStatus } from './utils/updateChecker';
+
+type AvailableUpdate = Extract<UpdateStatus, { available: true }>;
 
 const ActiveWorkoutPage = lazy(() =>
   import('./pages/ActiveWorkoutPage').then((module) => ({ default: module.ActiveWorkoutPage }))
@@ -138,15 +140,31 @@ function AppContent() {
 function App() {
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [updateVersion, setUpdateVersion] = useState<string | null>(null);
+  const [availableUpdate, setAvailableUpdate] = useState<AvailableUpdate | null>(null);
+  const skippedUpdateVersion = useRef<string | null>(null);
 
   // Check for app updates (GitHub Pages / PWA)
   useEffect(() => {
-    const cleanup = startUpdateChecker((remoteVersion) => {
-      setUpdateVersion(remoteVersion);
+    const cleanup = startUpdateChecker((update) => {
+      if (update.remoteVersion !== skippedUpdateVersion.current) {
+        setAvailableUpdate(update);
+      }
     });
     return cleanup;
   }, []);
+
+  const skipUpdate = () => {
+    skippedUpdateVersion.current = availableUpdate?.remoteVersion ?? null;
+    setAvailableUpdate(null);
+  };
+
+  const updatePrompt = availableUpdate ? (
+    <UpdatePrompt
+      remoteVersion={availableUpdate.remoteVersion}
+      changes={availableUpdate.changes}
+      onSkip={skipUpdate}
+    />
+  ) : null;
 
   useEffect(() => {
     // FAST PATH: check localStorage for cached token (instant, no network).
@@ -220,7 +238,7 @@ function App() {
   if (!isAuthenticated) {
     return (
       <>
-        {updateVersion && <UpdateBanner remoteVersion={updateVersion} />}
+        {updatePrompt}
         <LoginPage onLoginSuccess={() => setIsAuthenticated(true)} />
       </>
     );
@@ -228,7 +246,7 @@ function App() {
 
   return (
     <>
-      {updateVersion && <UpdateBanner remoteVersion={updateVersion} />}
+      {updatePrompt}
       <HashRouter>
         <AppContent />
       </HashRouter>

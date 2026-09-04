@@ -1,36 +1,54 @@
 // src/components/ui/UpdateBanner.tsx
 
 /**
- * A banner that appears at the top of the screen when a new version is available.
- * Shows the new version number and a button to reload the app.
+ * Compact confirmation dialog shown when a new version is available.
+ * The update is only applied after explicit user consent.
  */
 
 import { RefreshCw } from 'lucide-react';
 import { applyUpdate } from '../../utils/updateChecker';
+import { Button } from './Button';
 
-interface UpdateBannerProps {
+interface UpdatePromptProps {
   remoteVersion: string;
+  changes: string[];
+  onSkip: () => void;
 }
 
-export function UpdateBanner({ remoteVersion }: UpdateBannerProps) {
+export function UpdatePrompt({ remoteVersion, changes, onSkip }: UpdatePromptProps) {
+  const visibleChanges = changes.slice(0, 2);
+
   return (
-    <div className="fixed top-0 left-0 right-0 z-50 animate-fade-in">
-      <div className="max-w-[480px] mx-auto px-4 pt-2">
-        <div className="flex items-center justify-between gap-3 px-4 py-3 bg-[#1B5E20] rounded-xl shadow-lg">
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-semibold text-white">
-              Доступно обновление v{remoteVersion}
-            </p>
-          </div>
-          <button
-            onClick={applyUpdate}
-            className="flex items-center gap-1.5 px-4 py-2 bg-white/20 hover:bg-white/30
-                       rounded-lg text-white text-sm font-semibold shrink-0
-                       active:scale-95 transition-all"
-          >
-            <RefreshCw size={16} />
+    <div className="fixed inset-0 z-50 flex items-center justify-center px-6" role="dialog" aria-modal="true" aria-labelledby="update-title">
+      <div className="absolute inset-0 bg-black/60" />
+      <div className="relative w-full max-w-[360px] rounded-2xl bg-[#1E1E1E] p-5 shadow-xl animate-slide-up">
+        <h2 id="update-title" className="text-lg font-bold text-white">
+          Доступна версия {remoteVersion}
+        </h2>
+
+        <div className="mt-2 text-sm text-[#B0B0B0]">
+          {visibleChanges.length > 0 ? (
+            <ul className="space-y-1">
+              {visibleChanges.map((change) => (
+                <li key={change} className="flex gap-2">
+                  <span className="text-green-500" aria-hidden="true">•</span>
+                  <span>{change}</span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p>Исправления и улучшения.</p>
+          )}
+        </div>
+
+        <div className="mt-5 flex gap-3">
+          <Button variant="ghost" size="sm" fullWidth onClick={onSkip}>
+            Пропустить
+          </Button>
+          <Button size="sm" fullWidth onClick={() => void applyUpdate()}>
+            <RefreshCw size={16} aria-hidden="true" />
             Обновить
-          </button>
+          </Button>
         </div>
       </div>
     </div>

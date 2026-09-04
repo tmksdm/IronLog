@@ -6,4 +6,4 @@ export { Modal } from './Modal';
 export { NumberStepper } from './NumberStepper';
 export { LoadingScreen } from './LoadingScreen';
 export { AppErrorBoundary } from './AppErrorBoundary';
-export { UpdateBanner } from './UpdateBanner';
+export { UpdatePrompt } from './UpdateBanner';
