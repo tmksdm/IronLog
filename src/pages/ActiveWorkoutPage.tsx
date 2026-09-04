@@ -22,6 +22,7 @@ import {
   RestTimer,
   ConfirmModal,
   ExercisesReview,
+  BodyWeightEditModal,
 } from '../components/workout';
 import { LoadingScreen } from '../components/ui';
 import FinishSummary from '../components/workout/FinishSummary';
@@ -45,6 +46,7 @@ export function ActiveWorkoutPage() {
   const postFinish = useWorkoutStore((s) => s.postFinish);
   const enterPostFinish = useWorkoutStore((s) => s.enterPostFinish);
   const finishWorkout = useWorkoutStore((s) => s.finishWorkout);
+  const updateWeightBefore = useWorkoutStore((s) => s.updateWeightBefore);
 
   const refreshNextDayInfo = useAppStore((s) => s.refreshNextDayInfo);
 
@@ -54,6 +56,7 @@ export function ActiveWorkoutPage() {
   const [showSkipConfirm, setShowSkipConfirm] = useState<number | null>(null);
   const [showFinishConfirm, setShowFinishConfirm] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [showWeightEdit, setShowWeightEdit] = useState(false);
 
   // Refs for scrolling
   const exerciseRefs = useRef<Map<number, HTMLDivElement>>(new Map());
@@ -168,6 +171,13 @@ export function ActiveWorkoutPage() {
     [finishWorkout, refreshNextDayInfo, navigate]
   );
 
+  const handleWeightBeforeSave = useCallback(
+    async (weightBefore: number | null) => {
+      await updateWeightBefore(weightBefore);
+    },
+    [updateWeightBefore]
+  );
+
   // ---- Scroll helpers ----
 
   const scrollToExercise = (index: number) => {
@@ -211,6 +221,7 @@ export function ActiveWorkoutPage() {
           exercisesTotal={exercisesTotal}
           onFinish={() => {}} // No-op in post-finish
           onCancel={() => {}} // No-op in post-finish
+          onEditWeight={() => setShowWeightEdit(true)}
           postFinish
         />
 
@@ -222,6 +233,13 @@ export function ActiveWorkoutPage() {
 
         {/* Rest timer (in case a rest is still running) */}
         <RestTimer />
+        <BodyWeightEditModal
+          isOpen={showWeightEdit}
+          weightBefore={session.weightBefore}
+          showWeightAfter={false}
+          onClose={() => setShowWeightEdit(false)}
+          onSave={handleWeightBeforeSave}
+        />
       </div>
     );
   }
@@ -238,6 +256,7 @@ export function ActiveWorkoutPage() {
         exercisesTotal={exercisesTotal}
         onFinish={handleFinishPress}
         onCancel={handleCancelPress}
+        onEditWeight={() => setShowWeightEdit(true)}
       />
 
       {/* Navigation grid */}
@@ -271,6 +290,14 @@ export function ActiveWorkoutPage() {
 
       {/* Rest timer overlay / bubble */}
       <RestTimer />
+
+      <BodyWeightEditModal
+        isOpen={showWeightEdit}
+        weightBefore={session.weightBefore}
+        showWeightAfter={false}
+        onClose={() => setShowWeightEdit(false)}
+        onSave={handleWeightBeforeSave}
+      />
 
       {/* Cancel confirmation — step 1 */}
       <ConfirmModal

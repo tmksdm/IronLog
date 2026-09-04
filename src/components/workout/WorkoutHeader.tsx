@@ -7,9 +7,10 @@
  */
 
 import { useState, useEffect, useRef } from 'react';
-import { X, Flag } from 'lucide-react';
+import { X, Flag, Pencil, Scale } from 'lucide-react';
 import type { WorkoutSession } from '../../types';
 import { getDayTypeColor } from '../../theme';
+import { formatDecimal } from '../../utils/format';
 
 interface WorkoutHeaderProps {
   session: WorkoutSession;
@@ -17,6 +18,7 @@ interface WorkoutHeaderProps {
   exercisesTotal: number;
   onFinish: () => void;
   onCancel: () => void;
+  onEditWeight: () => void;
   postFinish?: boolean;
 }
 
@@ -34,6 +36,7 @@ export function WorkoutHeader({
   exercisesTotal,
   onFinish,
   onCancel,
+  onEditWeight,
   postFinish = false,
 }: WorkoutHeaderProps) {
   const accentColor = getDayTypeColor(session.dayTypeId);
@@ -101,6 +104,17 @@ export function WorkoutHeader({
           </button>
         )}
       </div>
+
+      <button
+        type="button"
+        onClick={onEditWeight}
+        aria-label="Изменить вес до тренировки"
+        className="flex items-center gap-1.5 mb-2 px-2 py-1 -ml-2 rounded-lg text-xs text-[#B0B0B0] active:bg-white/10"
+      >
+        <Scale size={14} />
+        Вес до: {session.weightBefore === null ? '—' : `${formatDecimal(session.weightBefore)} кг`}
+        <Pencil size={12} className="text-[#81C784]" />
+      </button>
 
       {/* Progress bar */}
       <div className="flex items-center gap-3">

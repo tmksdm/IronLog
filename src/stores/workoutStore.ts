@@ -74,6 +74,7 @@ export interface WorkoutState {
     weightBefore: number | null
   ) => Promise<void>;
   recordEndTime: () => void;
+  updateWeightBefore: (weightBefore: number | null) => Promise<void>;
   finishWorkout: (weightAfter: number | null) => Promise<WorkoutSession | null>;
   cancelWorkout: () => Promise<void>;
   restoreWorkout: (snapshot: WorkoutSnapshot) => void;
@@ -309,6 +310,19 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
     persistState(get());
   },
 
+  updateWeightBefore: async (weightBefore) => {
+    const { session } = get();
+    if (!session) return;
+
+    await workoutRepo.updateWorkoutSessionBodyWeight(
+      session.id,
+      weightBefore,
+      session.weightAfter
+    );
+    set({ session: { ...session, weightBefore } });
+    persistState(get());
+  },
+
   // =======================================
   // ENTER POST-FINISH MODE
   // =======================================
@@ -389,6 +403,7 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
       // Finish session in DB
       await workoutRepo.finishWorkoutSession(
         session.id,
+        session.weightBefore,
         weightAfter,
         session.timeEnd ?? new Date().toISOString()
       );

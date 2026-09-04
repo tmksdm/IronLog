@@ -31,7 +31,7 @@ describe('checkForUpdate', () => {
       'fetch',
       vi.fn().mockResolvedValue({
         ok: true,
-        json: () => Promise.resolve({ version: '0.25.0', changes: ['Без изменений'] }),
+        json: () => Promise.resolve({ version: '0.26.0', changes: ['Без изменений'] }),
       })
     );
 

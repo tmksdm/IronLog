@@ -7,3 +7,5 @@ export { SetRow } from './SetRow';
 export { RestTimer } from './RestTimer';
 export { ConfirmModal } from './ConfirmModal';
 export { ExercisesReview } from './ExercisesReview';
+export { BodyWeightCard } from './BodyWeightCard';
+export { BodyWeightEditModal } from './BodyWeightEditModal';

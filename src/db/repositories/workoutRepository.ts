@@ -108,6 +108,7 @@ export async function createWorkoutSession(data: {
  */
 export async function finishWorkoutSession(
   id: string,
+  weightBefore: number | null,
   weightAfter: number | null,
   timeEnd: string
 ): Promise<void> {
@@ -124,11 +125,27 @@ export async function finishWorkoutSession(
 
   await db.run(
     `UPDATE workout_sessions
-     SET time_end = ?, weight_after = ?, total_kg = ?
+     SET time_end = ?, weight_before = ?, weight_after = ?, total_kg = ?
      WHERE id = ?`,
-    [timeEnd, weightAfter, totalKg, id]
+    [timeEnd, weightBefore, weightAfter, totalKg, id]
   );
 
+  await saveToStore();
+}
+
+/**
+ * Update body-weight measurements without requiring a network connection.
+ */
+export async function updateWorkoutSessionBodyWeight(
+  id: string,
+  weightBefore: number | null,
+  weightAfter: number | null
+): Promise<void> {
+  const db = await getDb();
+  await db.run(
+    'UPDATE workout_sessions SET weight_before = ?, weight_after = ? WHERE id = ?',
+    [weightBefore, weightAfter, id]
+  );
   await saveToStore();
 }
 
@@ -522,7 +539,6 @@ export async function deleteCardioLogsByIds(ids: string[]): Promise<void> {
     console.error('Cloud sync after standalone cardio batch delete failed:', err)
   );
 }
-
 
 // ==========================================
 // Exercise Summary (for workout detail/finish screen)

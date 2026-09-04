@@ -11,6 +11,7 @@ import { useWorkoutStore } from '../../stores/workoutStore';
 import type { ActiveExercise } from '../../stores/workoutStore';
 import { Dumbbell, Clock, Scale, CheckCircle2, CircleDot, CircleOff } from 'lucide-react';
 import { formatWorkoutDuration } from '../../utils/format';
+import { parseBodyWeightInput } from '../../utils/bodyWeight';
 
 interface FinishSummaryProps {
   onFinish: (weightAfter: number | null) => void;
@@ -67,6 +68,7 @@ export default function FinishSummary({ onFinish, isSaving }: FinishSummaryProps
   const [weightAfter, setWeightAfter] = useState<string>(
     session?.weightBefore ? session.weightBefore.toString() : ''
   );
+  const [weightError, setWeightError] = useState<string | null>(null);
 
   const counts = useMemo(() => countByStatus(exercises), [exercises]);
   const tonnage = useMemo(() => calculateTonnage(exercises), [exercises]);
@@ -80,8 +82,13 @@ export default function FinishSummary({ onFinish, isSaving }: FinishSummaryProps
   const dayName = session ? (DAY_NAMES[session.dayTypeId] ?? '') : '';
 
   const handleFinish = () => {
-    const parsed = parseFloat(weightAfter.replace(',', '.'));
-    onFinish(isNaN(parsed) || parsed <= 0 ? null : parsed);
+    const parsed = parseBodyWeightInput(weightAfter);
+    if (parsed.error) {
+      setWeightError(parsed.error);
+      return;
+    }
+    setWeightError(null);
+    onFinish(parsed.value);
   };
 
   return (
@@ -165,6 +172,11 @@ export default function FinishSummary({ onFinish, isSaving }: FinishSummaryProps
             </span>
           </div>
         </div>
+        {weightError && (
+          <p className="text-sm text-red-400 mt-2 text-center" role="alert">
+            {weightError}
+          </p>
+        )}
       </div>
 
       {/* Action button */}

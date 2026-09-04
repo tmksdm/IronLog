@@ -10,13 +10,11 @@ import { useParams, useNavigate } from 'react-router-dom';
 import {
   Clock,
   Dumbbell,
-  Scale,
   Activity,
   ArrowLeft,
   CheckCircle2,
   CircleOff,
   CircleDot,
-  ArrowRight,
   Trash2,
 } from 'lucide-react';
 import { workoutRepo } from '../db';
@@ -34,9 +32,10 @@ import {
 } from '../utils/format';
 import { getDayTypeColor, getDayTypeTextClass, DAY_TYPE_NAMES_RU } from '../theme';
 import { LoadingScreen } from '../components/ui';
-import { ConfirmModal } from '../components/workout';
+import { BodyWeightCard, BodyWeightEditModal, ConfirmModal } from '../components/workout';
 import { useAppStore } from '../stores/appStore';
 import { rollbackProgressionForSession } from '../utils/rollbackProgression';
+import { pushToCloud } from '../lib/sync';
 
 
 
@@ -51,6 +50,7 @@ export function WorkoutDetailPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showWeightEdit, setShowWeightEdit] = useState(false);
   const [pullupLogs, setPullupLogs] = useState<PullupLog[]>([]);  
 
   useEffect(() => {
@@ -104,31 +104,20 @@ export function WorkoutDetailPage() {
     }
   }
 
+  async function handleWeightSave(weightBefore: number | null, weightAfter: number | null) {
+    if (!session) return;
+    await workoutRepo.updateWorkoutSessionBodyWeight(session.id, weightBefore, weightAfter);
+    setSession({ ...session, weightBefore, weightAfter });
+    pushToCloud().catch((err) =>
+      console.error('Cloud sync after body-weight update failed:', err)
+    );
+  }
+
   // --- Computed values ---
 
   const durationStr = useMemo(() => {
     if (!session?.timeStart || !session?.timeEnd) return '—';
     return formatWorkoutDuration(session.timeStart, session.timeEnd) ?? '—';
-  }, [session]);
-
-  const bodyWeightStr = useMemo(() => {
-    if (!session) return null;
-    const { weightBefore, weightAfter } = session;
-    if (weightBefore !== null && weightAfter !== null) {
-      const avg = (weightBefore + weightAfter) / 2;
-      return {
-        before: formatDecimal(weightBefore),
-        after: formatDecimal(weightAfter),
-        avg: formatDecimal(avg),
-      };
-    }
-    if (weightBefore !== null) {
-      return { before: formatDecimal(weightBefore), after: null, avg: null };
-    }
-    if (weightAfter !== null) {
-      return { before: null, after: formatDecimal(weightAfter), avg: null };
-    }
-    return null;
   }, [session]);
 
   const cardioResult = useMemo(() => {
@@ -244,47 +233,11 @@ export function WorkoutDetailPage() {
           </div>
         </div>
 
-        {/* Body weight card */}
-        {bodyWeightStr && (
-          <div className="bg-[#252525] rounded-xl p-4 mt-3">
-            <div className="flex items-center gap-2 mb-2">
-              <Scale size={18} className="text-[#B0B0B0]" />
-              <span className="text-sm font-semibold text-white">Вес тела</span>
-            </div>
-            <div className="flex items-center justify-center gap-4">
-              {bodyWeightStr.before !== null && (
-                <div className="flex flex-col items-center">
-                  <span className="text-xs text-[#707070]">До</span>
-                  <span className="text-base font-bold text-white">
-                    {bodyWeightStr.before}
-                  </span>
-                </div>
-              )}
-              {bodyWeightStr.before !== null && bodyWeightStr.after !== null && (
-                <ArrowRight size={16} className="text-[#555555]" />
-              )}
-              {bodyWeightStr.after !== null && (
-                <div className="flex flex-col items-center">
-                  <span className="text-xs text-[#707070]">После</span>
-                  <span className="text-base font-bold text-white">
-                    {bodyWeightStr.after}
-                  </span>
-                </div>
-              )}
-              {bodyWeightStr.avg !== null && (
-                <>
-                  <div className="w-px h-8 bg-[#333333]" />
-                  <div className="flex flex-col items-center">
-                    <span className="text-xs text-[#707070]">Среднее</span>
-                    <span className="text-base font-bold text-[#4CAF50]">
-                      {bodyWeightStr.avg}
-                    </span>
-                  </div>
-                </>
-              )}
-            </div>
-          </div>
-        )}
+        <BodyWeightCard
+          weightBefore={session.weightBefore}
+          weightAfter={session.weightAfter}
+          onEdit={() => setShowWeightEdit(true)}
+        />
 
         {/* Exercise counts */}
         <div className="bg-[#252525] rounded-xl p-3 mt-3">
@@ -389,6 +342,13 @@ export function WorkoutDetailPage() {
         cancelText="Отмена"
         onConfirm={handleDelete}
         onCancel={() => setShowDeleteConfirm(false)}
+      />
+      <BodyWeightEditModal
+        isOpen={showWeightEdit}
+        weightBefore={session.weightBefore}
+        weightAfter={session.weightAfter}
+        onClose={() => setShowWeightEdit(false)}
+        onSave={handleWeightSave}
       />
     </div>
   );

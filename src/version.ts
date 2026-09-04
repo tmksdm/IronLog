@@ -5,7 +5,7 @@
  * Update this file with each release.
  */
 
-export const APP_VERSION = '0.25.0';
+export const APP_VERSION = '0.26.0';
 
 export interface ChangelogEntry {
   version: string;
@@ -14,6 +14,16 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+
+  {
+    version: '0.26.0',
+    date: '2026-09-04',
+    changes: [
+      'Вес до тренировки теперь можно исправить прямо во время занятия.',
+      'Вес до и после можно редактировать на итоговом экране и в истории.',
+      'Исправленный вес сохраняется локально без сети и обновляет облачную копию в фоне.',
+    ],
+  },
 
   {
     version: '0.25.0',
