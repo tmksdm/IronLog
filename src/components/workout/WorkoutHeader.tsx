@@ -83,9 +83,9 @@ export function WorkoutHeader({
 
   return (
     <div className="bg-[#1E1E1E] px-4 pt-3 pb-2">
-      {/* Top row: day name + time + cancel */}
-      <div className="flex items-center justify-between mb-2">
-        <div className="flex items-center gap-2">
+      {/* Top row: day name + time + body weight + cancel */}
+      <div className="flex items-center mb-2">
+        <div className="flex items-center gap-2 shrink-0">
           <h1 className="text-xl font-bold" style={{ color: accentColor }}>
             {dayNames[session.dayTypeId]}
           </h1>
@@ -95,26 +95,26 @@ export function WorkoutHeader({
           </span>
         </div>
 
+        <button
+          type="button"
+          onClick={onEditWeight}
+          aria-label="Изменить вес до тренировки"
+          className="flex items-center gap-1.5 ml-auto px-2 py-1 rounded-lg text-xs text-[#B0B0B0] active:bg-white/10"
+        >
+          <Scale size={14} />
+          {session.weightBefore === null ? '—' : `${formatDecimal(session.weightBefore)} кг`}
+          <Pencil size={12} className="text-[#81C784]" />
+        </button>
+
         {!postFinish && (
           <button
-            className="p-2 rounded-full active:bg-white/10"
+            className="ml-1 p-2 rounded-full active:bg-white/10"
             onClick={onCancel}
           >
             <X size={24} className="text-[#707070]" />
           </button>
         )}
       </div>
-
-      <button
-        type="button"
-        onClick={onEditWeight}
-        aria-label="Изменить вес до тренировки"
-        className="flex items-center gap-1.5 mb-2 px-2 py-1 -ml-2 rounded-lg text-xs text-[#B0B0B0] active:bg-white/10"
-      >
-        <Scale size={14} />
-        Вес до: {session.weightBefore === null ? '—' : `${formatDecimal(session.weightBefore)} кг`}
-        <Pencil size={12} className="text-[#81C784]" />
-      </button>
 
       {/* Progress bar */}
       <div className="flex items-center gap-3">
