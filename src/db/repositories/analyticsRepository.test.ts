@@ -31,13 +31,13 @@ describe('jump-rope analytics', () => {
       expect.stringMatching(/AVG\(count\)[\s\S]*type = 'jump_rope'[\s\S]*GROUP BY year, month/)
     );
     expect(result).toEqual([
-      { year: 2026, month: 9, label: 'Сен 2026', avgCount: 312.5, sessionCount: 4 },
+      { year: 2026, month: 9, label: 'Сен 2026', avgCount: 312, sessionCount: 4 },
     ]);
   });
 
   it('returns the yearly average jump count per session', async () => {
     mocks.query.mockResolvedValue({
-      values: [{ year: 2026, avg_count: 300, session_count: 8 }],
+      values: [{ year: 2026, avg_count: 300.9, session_count: 8 }],
     });
 
     const result = await getYearlyJumpRopeCount();

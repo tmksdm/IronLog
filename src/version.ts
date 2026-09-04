@@ -5,7 +5,7 @@
  * Update this file with each release.
  */
 
-export const APP_VERSION = '0.26.5';
+export const APP_VERSION = '0.26.6';
 
 export interface ChangelogEntry {
   version: string;
@@ -14,6 +14,14 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+
+  {
+    version: '0.26.6',
+    date: '2026-09-04',
+    changes: [
+      'Средние значения скакалки и подтягиваний округляются вниз до целого числа.',
+    ],
+  },
 
   {
     version: '0.26.5',

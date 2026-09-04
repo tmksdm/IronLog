@@ -247,7 +247,7 @@ export async function getMonthlyPullups(): Promise<MonthlyPullups[]> {
     year: row.year,
     month: row.month,
     label: monthLabel(row.year, row.month),
-    avgReps: row.avg_reps ?? 0,
+    avgReps: Math.floor(row.avg_reps ?? 0),
     sessionCount: row.session_count ?? 0,
   }));
 }
@@ -282,7 +282,7 @@ export async function getYearlyPullups(): Promise<YearlyPullups[]> {
 
   return (result.values ?? []).map((row: any) => ({
     year: row.year,
-    avgReps: row.avg_reps ?? 0,
+    avgReps: Math.floor(row.avg_reps ?? 0),
     sessionCount: row.session_count ?? 0,
   }));
 }

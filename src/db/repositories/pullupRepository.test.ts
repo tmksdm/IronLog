@@ -38,7 +38,7 @@ describe('pull-up analytics', () => {
     expect(sql).toMatch(/SUM\(reps\) as session_total_reps/);
     expect(sql).toMatch(/GROUP BY year, month, session_key/);
     expect(result).toEqual([
-      { year: 2026, month: 9, label: 'Сен 2026', avgReps: 37.5, sessionCount: 4 },
+      { year: 2026, month: 9, label: 'Сен 2026', avgReps: 37, sessionCount: 4 },
     ]);
   });
 
@@ -52,6 +52,6 @@ describe('pull-up analytics', () => {
 
     expect(sql).toMatch(/AVG\(session_total_reps\)/);
     expect(sql).toMatch(/GROUP BY year, session_key/);
-    expect(result).toEqual([{ year: 2026, avgReps: 40.25, sessionCount: 12 }]);
+    expect(result).toEqual([{ year: 2026, avgReps: 40, sessionCount: 12 }]);
   });
 });

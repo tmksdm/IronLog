@@ -716,7 +716,7 @@ function JumpRopeTab() {
             <AnalyticsChart
               data={monthly12}
               lineColor="#AB47BC"
-              formatValue={(v) => `${formatDecimal(v)} прыж.`}
+              formatValue={(v) => `${Math.floor(v)} прыж.`}
             />
             <StatTable
               rows={monthly
@@ -724,7 +724,7 @@ function JumpRopeTab() {
                 .reverse()
                 .map((m) => ({
                   label: m.label,
-                  value: `${formatDecimal(m.avgCount)} прыж.`,
+                  value: `${m.avgCount} прыж.`,
                   sub: `${m.sessionCount} тренир.`,
                 }))}
             />
@@ -741,7 +741,7 @@ function JumpRopeTab() {
             <AnalyticsChart
               data={yearly12}
               lineColor="#AB47BC"
-              formatValue={(v) => `${formatDecimal(v)} прыж.`}
+              formatValue={(v) => `${Math.floor(v)} прыж.`}
             />
             <StatTable
               rows={yearly
@@ -749,7 +749,7 @@ function JumpRopeTab() {
                 .reverse()
                 .map((y) => ({
                   label: `${y.year}`,
-                  value: `${formatDecimal(y.avgCount)} прыж.`,
+                  value: `${y.avgCount} прыж.`,
                   sub: `${y.sessionCount} тренир.`,
                 }))}
             />
@@ -794,7 +794,7 @@ function PullupsTab() {
             <AnalyticsChart
               data={monthly12}
               lineColor="#FF9800"
-              formatValue={(v) => `${formatDecimal(v)} повт.`}
+              formatValue={(v) => `${Math.floor(v)} повт.`}
             />
             <StatTable
               rows={monthly
@@ -802,7 +802,7 @@ function PullupsTab() {
                 .reverse()
                 .map((m) => ({
                   label: m.label,
-                  value: `${formatDecimal(m.avgReps)} повт.`,
+                  value: `${m.avgReps} повт.`,
                   sub: `${m.sessionCount} тренир.`,
                 }))}
             />
@@ -819,7 +819,7 @@ function PullupsTab() {
             <AnalyticsChart
               data={yearly12}
               lineColor="#FF9800"
-              formatValue={(v) => `${formatDecimal(v)} повт.`}
+              formatValue={(v) => `${Math.floor(v)} повт.`}
             />
             <StatTable
               rows={yearly
@@ -827,7 +827,7 @@ function PullupsTab() {
                 .reverse()
                 .map((y) => ({
                   label: `${y.year}`,
-                  value: `${formatDecimal(y.avgReps)} повт.`,
+                  value: `${y.avgReps} повт.`,
                   sub: `${y.sessionCount} тренир.`,
                 }))}
             />

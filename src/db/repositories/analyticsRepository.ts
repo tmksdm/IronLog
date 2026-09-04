@@ -385,7 +385,7 @@ export async function getMonthlyJumpRopeCount(): Promise<MonthlyJumpRope[]> {
     year: row.year,
     month: row.month,
     label: monthLabel(row.year, row.month),
-    avgCount: row.avg_count ?? 0,
+    avgCount: Math.floor(row.avg_count ?? 0),
     sessionCount: row.session_count ?? 0,
   }));
 }
@@ -408,7 +408,7 @@ export async function getYearlyJumpRopeCount(): Promise<YearlyJumpRope[]> {
 
   return (result.values ?? []).map((row: any) => ({
     year: row.year,
-    avgCount: row.avg_count ?? 0,
+    avgCount: Math.floor(row.avg_count ?? 0),
     sessionCount: row.session_count ?? 0,
   }));
 }
