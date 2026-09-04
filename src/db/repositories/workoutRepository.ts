@@ -387,7 +387,7 @@ export async function getLogsBySessionAndExercise(
 
 /**
  * Get the last working set logs for an exercise (across all sessions).
- * Returns up to 3 rows (one per working set) from the most recent session.
+ * Returns every performed working set from the most recent completed session.
  */
 export async function getLastWorkingLogsForExercise(
   exerciseId: string
@@ -395,13 +395,22 @@ export async function getLastWorkingLogsForExercise(
   const db = await getDb();
   const result = await db.query(
     `SELECT el.* FROM exercise_logs el
-     JOIN workout_sessions ws ON el.workout_session_id = ws.id
      WHERE el.exercise_id = ?
        AND el.set_type = 'working'
        AND el.is_skipped = 0
-     ORDER BY ws.date DESC
-     LIMIT 3`,
-    [exerciseId]
+       AND el.workout_session_id = (
+         SELECT el2.workout_session_id
+         FROM exercise_logs el2
+         JOIN workout_sessions ws2 ON el2.workout_session_id = ws2.id
+         WHERE el2.exercise_id = ?
+           AND el2.set_type = 'working'
+           AND el2.is_skipped = 0
+           AND ws2.time_end IS NOT NULL
+         ORDER BY ws2.time_end DESC
+         LIMIT 1
+       )
+     ORDER BY el.set_number ASC`,
+    [exerciseId, exerciseId]
   );
   return (result.values ?? []).map(mapLogRow);
 }

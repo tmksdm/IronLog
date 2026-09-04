@@ -5,7 +5,7 @@
  * Update this file with each release.
  */
 
-export const APP_VERSION = '0.26.1';
+export const APP_VERSION = '0.26.2';
 
 export interface ChangelogEntry {
   version: string;
@@ -14,6 +14,15 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+
+  {
+    version: '0.26.2',
+    date: '2026-09-04',
+    changes: [
+      'В активной тренировке показаны результаты рабочих подходов прошлого выполнения упражнения.',
+      'Подсказка «прошл.: 7/6/6» не учитывает разминку и пропущенные упражнения.',
+    ],
+  },
 
   {
     version: '0.26.1',

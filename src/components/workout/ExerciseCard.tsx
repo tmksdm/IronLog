@@ -31,7 +31,7 @@ export function ExerciseCard({
   onSkip,
   onUnskip,
 }: ExerciseCardProps) {
-  const { exercise, sets, status, isPriority } = activeExercise;
+  const { exercise, sets, status, isPriority, previousWorkingReps } = activeExercise;
   const isSkipped = status === 'skipped';
   const accentColor = getDayTypeColor(dayTypeId);
 
@@ -55,7 +55,7 @@ export function ExerciseCard({
     style={{ borderLeftColor: isSkipped ? '#F44336' : accentColor }}
     >
       {/* Exercise header */}
-      <div className="flex items-start justify-between mb-3">
+      <div className="flex items-start justify-between mb-1">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1">
             {isPriority && (
@@ -67,14 +67,6 @@ export function ExerciseCard({
             )}
           </div>
           <h3 className="text-lg font-bold text-white">{exercise.name}</h3>
-          <div className="flex items-center gap-3 mt-0.5">
-            <span className="text-sm text-[#B0B0B0]">{weightInfo}</span>
-            {!isSkipped && totalWorkingSets > 0 && (
-              <span className="text-sm text-[#707070]">
-                {completedWorkingSets}/{totalWorkingSets}
-              </span>
-            )}
-          </div>
         </div>
 
         {/* Skip / Unskip button */}
@@ -99,6 +91,25 @@ export function ExerciseCard({
             </button>
           )}
         </div>
+      </div>
+
+      <div className="flex items-center justify-between gap-2 mb-3">
+        <div className="flex items-center gap-3 min-w-0">
+          <span className="text-sm text-[#B0B0B0]">{weightInfo}</span>
+          {!isSkipped && totalWorkingSets > 0 && (
+            <span className="text-sm text-[#707070]">
+              {completedWorkingSets}/{totalWorkingSets}
+            </span>
+          )}
+        </div>
+        {!isSkipped && previousWorkingReps && previousWorkingReps.length > 0 && (
+          <span
+            className="text-xs text-[#8A8A8A] whitespace-nowrap"
+            aria-label={`Результат прошлой тренировки: ${previousWorkingReps.join(', ')}`}
+          >
+            прошл.: {previousWorkingReps.join('/')}
+          </span>
+        )}
       </div>
 
       {/* Set rows */}
