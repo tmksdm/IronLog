@@ -31,6 +31,8 @@ import {
 import type { PullupStepResult, PullupInProgressState } from '../../types';
 import { Check, SkipForward, ChevronRight, X, RotateCcw } from 'lucide-react';
 import { buildInitialPullupState } from './pullupState';
+import { createCountdownDeadline, getCountdownSecondsLeft } from '../../utils/countdown';
+import { useAccurateRestTimer } from '../workout/useAccurateRestTimer';
 
 // Fallback grip list for safety
 const DAY3_GRIPS_DEFAULT: GripType[] = [
@@ -45,6 +47,7 @@ function finishRest(prev: PullupInProgressState): PullupInProgressState {
     isResting: false,
     restSecondsLeft: 0,
     restSecondsTotal: 0,
+    restEndsAt: null,
   };
   if (prev.plan.effectiveDay === 2 && !prev.ladderFinalSet) {
     return { ...cleared, currentSetIndex: (prev.currentSetIndex || 1) + 1 };
@@ -442,21 +445,32 @@ function PullupCore({
     onStateChange?.(state);
   }, [state, onStateChange]);
 
-  // Local rest timer tick
-  useEffect(() => {
-    if (!state.isResting) return;
-    const interval = setInterval(() => {
-      setState((prev) => {
-        if (!prev.isResting) return prev;
-        const next = prev.restSecondsLeft - 1;
-        if (next <= 0) {
-          return finishRest(prev);
-        }
-        return { ...prev, restSecondsLeft: next };
-      });
-    }, 1000);
-    return () => clearInterval(interval);
-  }, [state.isResting]);
+  const syncRestTimer = useCallback((now: number) => {
+    let finished = false;
+    setState((prev) => {
+      if (!prev.isResting) return prev;
+      const restEndsAt = prev.restEndsAt
+        ?? createCountdownDeadline(prev.restSecondsLeft, now);
+      const restSecondsLeft = getCountdownSecondsLeft(restEndsAt, now);
+      if (restSecondsLeft <= 0) {
+        finished = true;
+        return finishRest(prev);
+      }
+      if (
+        restSecondsLeft === prev.restSecondsLeft
+        && restEndsAt === prev.restEndsAt
+      ) return prev;
+      return { ...prev, restSecondsLeft, restEndsAt };
+    });
+    return finished;
+  }, []);
+
+  useAccurateRestTimer({
+    isRunning: state.isResting,
+    endsAt: state.restEndsAt
+      ?? (state.isResting ? createCountdownDeadline(state.restSecondsLeft) : null),
+    sync: syncRestTimer,
+  });
 
   // ---- Start / Skip ----
 
@@ -508,6 +522,8 @@ function PullupCore({
             ...prev,
             restSecondsLeft: prev.restSecondsLeft + 15,
             restSecondsTotal: prev.restSecondsTotal + 15,
+            restEndsAt: (prev.restEndsAt
+              ?? createCountdownDeadline(prev.restSecondsLeft)) + 15_000,
           }
         : prev
     );
@@ -537,6 +553,7 @@ function PullupCore({
           isResting: true,
           restSecondsLeft: restSec,
           restSecondsTotal: restSec,
+          restEndsAt: createCountdownDeadline(restSec),
         };
       });
     },
@@ -562,6 +579,7 @@ function PullupCore({
         isResting: true,
         restSecondsLeft: restSec,
         restSecondsTotal: restSec,
+        restEndsAt: createCountdownDeadline(restSec),
       };
     });
   }, []);
@@ -589,6 +607,7 @@ function PullupCore({
         isResting: true,
         restSecondsLeft: restSec,
         restSecondsTotal: restSec,
+        restEndsAt: createCountdownDeadline(restSec),
       };
     });
   }, []);
@@ -642,6 +661,7 @@ function PullupCore({
           isResting: true,
           restSecondsLeft: restSec,
           restSecondsTotal: restSec,
+          restEndsAt: createCountdownDeadline(restSec),
         };
       });
     },

@@ -21,5 +21,6 @@ export function buildInitialPullupState(): PullupInProgressState {
     isResting: false,
     restSecondsLeft: 0,
     restSecondsTotal: 0,
+    restEndsAt: null,
   };
 }

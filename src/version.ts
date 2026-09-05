@@ -5,7 +5,7 @@
  * Update this file with each release.
  */
 
-export const APP_VERSION = '0.26.10';
+export const APP_VERSION = '0.26.11';
 
 export interface ChangelogEntry {
   version: string;
@@ -14,6 +14,15 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+
+  {
+    version: '0.26.11',
+    date: '2026-09-05',
+    changes: [
+      'Таймер отдыха теперь сохраняет точный ход времени при выключенном экране и работе приложения в фоне.',
+      'После окончания отдыха внутри приложения ненадолго появляется уведомление.',
+    ],
+  },
 
   {
     version: '0.26.10',

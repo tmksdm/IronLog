@@ -15,6 +15,7 @@ import type {
   WorkoutSnapshot,
   Exercise,
 } from '../types';
+import { createCountdownDeadline, getCountdownSecondsLeft } from '../utils/countdown';
 import {
   exerciseRepo,
   workoutRepo,
@@ -59,6 +60,7 @@ export interface WorkoutState {
   currentExerciseIndex: number;
   restTimerSeconds: number;
   restTimerDefault: number;
+  restTimerEndsAt: number | null;
   isRestTimerRunning: boolean;
   stopwatchSeconds: number;
   isStopwatchRunning: boolean;
@@ -91,7 +93,7 @@ export interface WorkoutState {
   startRestTimer: () => void;
   startRestTimerWithDuration: (seconds: number) => void;
   stopRestTimer: () => void;
-  tickRestTimer: () => void;
+  tickRestTimer: (now?: number) => boolean;
   setOnRestTimerFinish: (cb: (() => void) | null) => void;
   startStopwatch: () => void;
   stopStopwatch: () => void;
@@ -121,6 +123,8 @@ function buildSnapshot(state: WorkoutState): WorkoutSnapshot | null {
     exercises: state.exercises as any,
     currentExerciseIndex: state.currentExerciseIndex,
     restTimerDefault: state.restTimerDefault,
+    restTimerEndsAt: state.restTimerEndsAt,
+    isRestTimerRunning: state.isRestTimerRunning,
     postFinish: state.postFinish,
   };
 }
@@ -192,6 +196,7 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
   currentExerciseIndex: 0,
   restTimerSeconds: 0,
   restTimerDefault: 60,
+  restTimerEndsAt: null,
   isRestTimerRunning: false,
   stopwatchSeconds: 0,
   isStopwatchRunning: false,
@@ -305,6 +310,11 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
   // RESTORE WORKOUT
   // =======================================
   restoreWorkout: (snapshot) => {
+    const restTimerEndsAt = snapshot.restTimerEndsAt ?? null;
+    const isRestTimerRunning = Boolean(snapshot.isRestTimerRunning && restTimerEndsAt);
+    const restTimerSeconds = isRestTimerRunning && restTimerEndsAt
+      ? getCountdownSecondsLeft(restTimerEndsAt)
+      : 0;
     set({
       _isRestoring: true,
       session: snapshot.session,
@@ -312,8 +322,9 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
       exercises: snapshot.exercises as any,
       currentExerciseIndex: snapshot.currentExerciseIndex,
       restTimerDefault: snapshot.restTimerDefault,
-      restTimerSeconds: 0,
-      isRestTimerRunning: false,
+      restTimerSeconds,
+      restTimerEndsAt: isRestTimerRunning ? restTimerEndsAt : null,
+      isRestTimerRunning,
       stopwatchSeconds: 0,
       isStopwatchRunning: false,
       postFinish: snapshot.postFinish ?? false,
@@ -447,6 +458,7 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
         currentExerciseIndex: 0,
         isRestTimerRunning: false,
         restTimerSeconds: 0,
+        restTimerEndsAt: null,
         isStopwatchRunning: false,
         stopwatchSeconds: 0,
         postFinish: false,
@@ -485,6 +497,7 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
       currentExerciseIndex: 0,
       isRestTimerRunning: false,
       restTimerSeconds: 0,
+      restTimerEndsAt: null,
       isStopwatchRunning: false,
       stopwatchSeconds: 0,
       postFinish: false,
@@ -657,37 +670,51 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
 
   startRestTimer: () => {
     const defaultSeconds = get().restTimerDefault;
-    set({ restTimerSeconds: defaultSeconds, isRestTimerRunning: true });
+    set({
+      restTimerSeconds: defaultSeconds,
+      restTimerEndsAt: createCountdownDeadline(defaultSeconds),
+      isRestTimerRunning: true,
+    });
+    persistState(get());
   },
 
   startRestTimerWithDuration: (seconds: number) => {
-    set({ restTimerSeconds: seconds, isRestTimerRunning: true });
+    set({
+      restTimerSeconds: seconds,
+      restTimerEndsAt: createCountdownDeadline(seconds),
+      isRestTimerRunning: true,
+    });
+    persistState(get());
   },
 
   stopRestTimer: () => {
-    set({ isRestTimerRunning: false, restTimerSeconds: 0 });
+    set({ isRestTimerRunning: false, restTimerSeconds: 0, restTimerEndsAt: null });
+    persistState(get());
   },
 
   setOnRestTimerFinish: (cb) => {
     set({ onRestTimerFinish: cb });
   },
 
-  tickRestTimer: () => {
-    set((state) => {
-      if (!state.isRestTimerRunning) return state;
-      const next = state.restTimerSeconds - 1;
-      if (next <= 0) {
-        // Fire the callback (if any) after state update
-        if (state.onRestTimerFinish) {
-          setTimeout(() => {
-            const current = get().onRestTimerFinish;
-            if (current) current();
-          }, 0);
-        }
-        return { restTimerSeconds: 0, isRestTimerRunning: false };
-      }
-      return { restTimerSeconds: next };
-    });
+  tickRestTimer: (now = Date.now()) => {
+    const state = get();
+    if (!state.isRestTimerRunning || state.restTimerEndsAt === null) return false;
+
+    const next = getCountdownSecondsLeft(state.restTimerEndsAt, now);
+    if (next > 0) {
+      if (next !== state.restTimerSeconds) set({ restTimerSeconds: next });
+      return false;
+    }
+
+    set({ restTimerSeconds: 0, restTimerEndsAt: null, isRestTimerRunning: false });
+    persistState(get());
+    if (state.onRestTimerFinish) {
+      setTimeout(() => {
+        const current = get().onRestTimerFinish;
+        if (current) current();
+      }, 0);
+    }
+    return true;
   },
 
   // =======================================

@@ -15,6 +15,7 @@ import { supabase } from './lib/supabase';
 import { useAppStore } from './stores/appStore';
 import { LoadingScreen, StartupErrorScreen } from './components/ui';
 import { BottomNav } from './components/layout';
+import { RestFinishedToastHost } from './components/workout/RestFinishedToast';
 import { LoginPage } from './pages/LoginPage';
 import { HomePage } from './pages/HomePage';
 import { startUpdateChecker } from './utils/updateChecker';
@@ -134,6 +135,7 @@ function AppContent() {
       </Suspense>
 
       {showNav && <BottomNav />}
+      <RestFinishedToastHost />
     </div>
   );
 }

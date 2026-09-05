@@ -111,6 +111,9 @@ export interface WorkoutSnapshot {
   exercises: ActiveExercise[];
   currentExerciseIndex: number;
   restTimerDefault: number;
+  /** Absolute deadline keeps an active rest accurate after app suspension. */
+  restTimerEndsAt?: number | null;
+  isRestTimerRunning?: boolean;
   /** post-finish summary mode */
   postFinish?: boolean;
 }
@@ -347,6 +350,8 @@ export interface PullupInProgressState {
   restSecondsLeft: number;
   /** Rest timer: total seconds for current rest (for progress ring) */
   restSecondsTotal: number;
+  /** Absolute deadline used to recover from background timer throttling. */
+  restEndsAt?: number | null;
 }
 
 /**

@@ -35,6 +35,33 @@ vi.mock('../lib/sync', () => ({
 
 import { useWorkoutStore } from './workoutStore';
 
+describe('rest timer clock', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    useWorkoutStore.setState({
+      session: null,
+      isActive: false,
+      restTimerSeconds: 60,
+      restTimerDefault: 60,
+      restTimerEndsAt: 61_000,
+      isRestTimerRunning: true,
+      onRestTimerFinish: null,
+    });
+  });
+
+  it('catches up from the absolute deadline after delayed callbacks', () => {
+    expect(useWorkoutStore.getState().tickRestTimer(31_000)).toBe(false);
+    expect(useWorkoutStore.getState().restTimerSeconds).toBe(30);
+
+    expect(useWorkoutStore.getState().tickRestTimer(61_000)).toBe(true);
+    expect(useWorkoutStore.getState()).toMatchObject({
+      restTimerSeconds: 0,
+      restTimerEndsAt: null,
+      isRestTimerRunning: false,
+    });
+  });
+});
+
 describe('workout snapshot persistence', () => {
   beforeEach(() => {
     vi.clearAllMocks();

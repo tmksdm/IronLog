@@ -9,11 +9,11 @@
  * Tap to toggle between modes. Auto-disappears when reaching 0.
  */
 
-import { useEffect, useRef, useCallback } from 'react';
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { RotateCcw, X } from 'lucide-react';
 import { useWorkoutStore } from '../../stores/workoutStore';
 import { colors } from '../../theme';
+import { useAccurateRestTimer } from './useAccurateRestTimer';
 
 // SVG ring constants
 const RING_SIZE = 240;
@@ -31,27 +31,32 @@ export function RestTimer() {
   const isRunning = useWorkoutStore((s) => s.isRestTimerRunning);
   const seconds = useWorkoutStore((s) => s.restTimerSeconds);
   const defaultSeconds = useWorkoutStore((s) => s.restTimerDefault);
+  const endsAt = useWorkoutStore((s) => s.restTimerEndsAt);
   const tickRestTimer = useWorkoutStore((s) => s.tickRestTimer);
   const stopRestTimer = useWorkoutStore((s) => s.stopRestTimer);
   const startRestTimer = useWorkoutStore((s) => s.startRestTimer);
 
-  if (!isRunning) return null;
+  useAccurateRestTimer({
+    isRunning,
+    endsAt,
+    sync: tickRestTimer,
+  });
 
   return (
-    <RunningRestTimer
-      seconds={seconds}
-      defaultSeconds={defaultSeconds}
-      tickRestTimer={tickRestTimer}
-      stopRestTimer={stopRestTimer}
-      startRestTimer={startRestTimer}
-    />
+    isRunning ? (
+      <RunningRestTimer
+        seconds={seconds}
+        defaultSeconds={defaultSeconds}
+        stopRestTimer={stopRestTimer}
+        startRestTimer={startRestTimer}
+      />
+    ) : null
   );
 }
 
 interface RunningRestTimerProps {
   seconds: number;
   defaultSeconds: number;
-  tickRestTimer: () => void;
   stopRestTimer: () => void;
   startRestTimer: () => void;
 }
@@ -59,26 +64,10 @@ interface RunningRestTimerProps {
 function RunningRestTimer({
   seconds,
   defaultSeconds,
-  tickRestTimer,
   stopRestTimer,
   startRestTimer,
 }: RunningRestTimerProps) {
   const [isExpanded, setIsExpanded] = useState(true);
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  // Tick the timer every second
-  useEffect(() => {
-    intervalRef.current = setInterval(() => {
-      tickRestTimer();
-    }, 1000);
-
-    return () => {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-        intervalRef.current = null;
-      }
-    };
-  }, [tickRestTimer]);
 
   const handleClose = useCallback(() => {
     stopRestTimer();
