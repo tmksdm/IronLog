@@ -8,7 +8,7 @@
 import type { ActiveExercise } from '../../stores/workoutStore';
 import { SetRow } from './SetRow';
 import { Card } from '../ui';
-import { formatWeight } from '../../utils/format';
+import { formatDecimal, formatWeight } from '../../utils/format';
 import { Ban, RotateCcw, Star } from 'lucide-react';
 import { getDayTypeColor } from '../../theme';
 
@@ -31,7 +31,14 @@ export function ExerciseCard({
   onSkip,
   onUnskip,
 }: ExerciseCardProps) {
-  const { exercise, sets, status, isPriority, previousWorkingReps } = activeExercise;
+  const {
+    exercise,
+    sets,
+    status,
+    isPriority,
+    previousWorkingWeight,
+    previousWorkingReps,
+  } = activeExercise;
   const isSkipped = status === 'skipped';
   const accentColor = getDayTypeColor(dayTypeId);
 
@@ -46,6 +53,12 @@ export function ExerciseCard({
     : exercise.hasAddedWeight
       ? 'Вес не задан'
       : 'Собственный вес';
+  const previousWeightText = exercise.hasAddedWeight && previousWorkingWeight !== undefined
+    ? `${formatDecimal(previousWorkingWeight)}, `
+    : '';
+  const previousWeightAria = exercise.hasAddedWeight && previousWorkingWeight !== undefined
+    ? `${formatDecimal(previousWorkingWeight)} килограмм, `
+    : '';
 
   return (
     <Card className={`
@@ -105,9 +118,9 @@ export function ExerciseCard({
         {!isSkipped && previousWorkingReps && previousWorkingReps.length > 0 && (
           <span
             className="text-xs text-[#8A8A8A] whitespace-nowrap"
-            aria-label={`Результат прошлой тренировки: ${previousWorkingReps.join(', ')}`}
+            aria-label={`Результат прошлой тренировки: ${previousWeightAria}${previousWorkingReps.join(', ')}`}
           >
-            прошл.: {previousWorkingReps.join('/')}
+            прошл.: {previousWeightText}{previousWorkingReps.join('/')}
           </span>
         )}
       </div>

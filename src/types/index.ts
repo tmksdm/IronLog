@@ -100,6 +100,7 @@ export interface ActiveExercise extends Exercise {
   status: ExerciseStatus;
   isPriority: boolean;
   sets: ExerciseLog[];
+  previousWorkingWeight?: number;
   previousWorkingReps?: number[];
 }
 

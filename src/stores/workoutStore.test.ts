@@ -1,15 +1,24 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
+  createWorkoutSession: vi.fn(),
   deleteWorkoutSession: vi.fn(),
+  getExercisesByDayType: vi.fn(),
+  getLastWorkingLogsForExercise: vi.fn(),
+  wasExerciseSkippedLastSession: vi.fn(),
   clearWorkoutState: vi.fn(),
   saveWorkoutState: vi.fn(),
 }));
 
 vi.mock('../db', () => ({
-  exerciseRepo: {},
+  exerciseRepo: {
+    getExercisesByDayType: mocks.getExercisesByDayType,
+  },
   workoutRepo: {
+    createWorkoutSession: mocks.createWorkoutSession,
     deleteWorkoutSession: mocks.deleteWorkoutSession,
+    getLastWorkingLogsForExercise: mocks.getLastWorkingLogsForExercise,
+    wasExerciseSkippedLastSession: mocks.wasExerciseSkippedLastSession,
   },
   workoutStateRepo: {
     clearWorkoutState: mocks.clearWorkoutState,
@@ -78,5 +87,58 @@ describe('workout snapshot persistence', () => {
     expect(events).toEqual(['save:start', 'save:end', 'delete', 'clear']);
     expect(useWorkoutStore.getState().isActive).toBe(false);
     expect(useWorkoutStore.getState().session).toBeNull();
+  });
+});
+
+describe('previous working-set results', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.createWorkoutSession.mockResolvedValue({
+      id: 'session-2',
+      dayTypeId: 1,
+      direction: 'normal',
+      date: '2026-09-05T10:00:00.000Z',
+      timeStart: '2026-09-05T10:00:00.000Z',
+      timeEnd: null,
+      weightBefore: null,
+      weightAfter: null,
+      totalKg: 0,
+      notes: null,
+    });
+    mocks.getExercisesByDayType.mockResolvedValue([{
+      id: 'exercise-1',
+      dayTypeId: 1,
+      name: 'Жим лёжа',
+      sortOrder: 1,
+      hasAddedWeight: true,
+      workingWeight: 52.5,
+      weightIncrement: 2.5,
+      warmup1Percent: null,
+      warmup2Percent: null,
+      warmup1Reps: 12,
+      warmup2Reps: 10,
+      maxRepsPerSet: 8,
+      minRepsPerSet: 4,
+      numWorkingSets: 3,
+      isTimed: false,
+      timerDurationSeconds: null,
+      timerPrepSeconds: null,
+      isActive: true,
+    }]);
+    mocks.wasExerciseSkippedLastSession.mockResolvedValue(false);
+    mocks.getLastWorkingLogsForExercise.mockResolvedValue([
+      { weight: 50, actualReps: 7 },
+      { weight: 50, actualReps: 7 },
+      { weight: 50, actualReps: 6 },
+    ]);
+  });
+
+  it('keeps the previous working weight together with its reps', async () => {
+    await useWorkoutStore.getState().startWorkout(1, 'normal', null);
+
+    expect(useWorkoutStore.getState().exercises[0]).toMatchObject({
+      previousWorkingWeight: 50,
+      previousWorkingReps: [7, 7, 6],
+    });
   });
 });

@@ -5,7 +5,7 @@
  * Update this file with each release.
  */
 
-export const APP_VERSION = '0.26.6';
+export const APP_VERSION = '0.26.7';
 
 export interface ChangelogEntry {
   version: string;
@@ -14,6 +14,14 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+
+  {
+    version: '0.26.7',
+    date: '2026-09-05',
+    changes: [
+      'Подсказка прошлого результата теперь показывает рабочий вес вместе с повторами.',
+    ],
+  },
 
   {
     version: '0.26.6',

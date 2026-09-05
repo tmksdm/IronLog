@@ -48,6 +48,7 @@ export interface ActiveExercise {
   status: ExerciseStatus;
   isPriority: boolean;
   originalSets: ActiveSet[] | null;
+  previousWorkingWeight?: number;
   previousWorkingReps?: number[];
 }
 
@@ -174,6 +175,7 @@ function cloneExerciseAtIndex(
     status: original.status,
     isPriority: original.isPriority,
     originalSets: original.originalSets,
+    previousWorkingWeight: original.previousWorkingWeight,
     previousWorkingReps: original.previousWorkingReps,
   };
   newExercises[index] = exercise;
@@ -227,10 +229,12 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
       const activeExercises: ActiveExercise[] = [];
       for (const exercise of orderedExercises) {
         let targetRepsPerSet: number[] | null = null;
+        let previousWorkingWeight: number | undefined;
         let previousWorkingReps: number[] = [];
 
         if (!exercise.isTimed) {
           const lastLogs = await workoutRepo.getLastWorkingLogsForExercise(exercise.id);
+          previousWorkingWeight = lastLogs[0]?.weight;
           previousWorkingReps = lastLogs.map((log) => log.actualReps);
 
           if (lastLogs.length > 0) {
@@ -274,6 +278,7 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
           status: 'not_started',
           isPriority: skippedIds.has(exercise.id),
           originalSets: null,
+          previousWorkingWeight,
           previousWorkingReps,
         });
       }
