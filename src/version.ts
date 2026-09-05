@@ -5,7 +5,7 @@
  * Update this file with each release.
  */
 
-export const APP_VERSION = '0.26.7';
+export const APP_VERSION = '0.26.8';
 
 export interface ChangelogEntry {
   version: string;
@@ -14,6 +14,15 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+
+  {
+    version: '0.26.8',
+    date: '2026-09-05',
+    changes: [
+      'Название упражнения теперь можно изменить тапом по нему прямо во время тренировки.',
+      'Новое название сохраняется локально и обновляет облачную копию в фоне.',
+    ],
+  },
 
   {
     version: '0.26.7',

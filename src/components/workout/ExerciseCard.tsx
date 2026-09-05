@@ -9,7 +9,7 @@ import type { ActiveExercise } from '../../stores/workoutStore';
 import { SetRow } from './SetRow';
 import { Card } from '../ui';
 import { formatDecimal, formatWeight } from '../../utils/format';
-import { Ban, RotateCcw, Star } from 'lucide-react';
+import { Ban, Pencil, RotateCcw, Star } from 'lucide-react';
 import { getDayTypeColor } from '../../theme';
 
 interface ExerciseCardProps {
@@ -18,6 +18,7 @@ interface ExerciseCardProps {
   dayTypeId: number;
   onCompleteSet: (exerciseIndex: number, setIndex: number, actualReps?: number) => void;
   onUpdateSetReps: (exerciseIndex: number, setIndex: number, reps: number) => void;
+  onRename: (exerciseIndex: number) => void;
   onSkip: (exerciseIndex: number) => void;
   onUnskip: (exerciseIndex: number) => void;
 }
@@ -28,6 +29,7 @@ export function ExerciseCard({
   dayTypeId,
   onCompleteSet,
   onUpdateSetReps,
+  onRename,
   onSkip,
   onUnskip,
 }: ExerciseCardProps) {
@@ -79,7 +81,15 @@ export function ExerciseCard({
               </span>
             )}
           </div>
-          <h3 className="text-lg font-bold text-white">{exercise.name}</h3>
+          <button
+            type="button"
+            className="flex max-w-full items-center gap-2 rounded-lg text-left active:bg-white/10"
+            onClick={() => onRename(exerciseIndex)}
+            aria-label={`Изменить название упражнения «${exercise.name}»`}
+          >
+            <span className="truncate text-lg font-bold text-white">{exercise.name}</span>
+            <Pencil size={15} className="shrink-0 text-[#8A8A8A]" aria-hidden="true" />
+          </button>
         </div>
 
         {/* Skip / Unskip button */}

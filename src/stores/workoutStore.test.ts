@@ -4,6 +4,7 @@ const mocks = vi.hoisted(() => ({
   createWorkoutSession: vi.fn(),
   deleteWorkoutSession: vi.fn(),
   getExercisesByDayType: vi.fn(),
+  updateExercise: vi.fn(),
   getLastWorkingLogsForExercise: vi.fn(),
   wasExerciseSkippedLastSession: vi.fn(),
   clearWorkoutState: vi.fn(),
@@ -13,6 +14,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock('../db', () => ({
   exerciseRepo: {
     getExercisesByDayType: mocks.getExercisesByDayType,
+    updateExercise: mocks.updateExercise,
   },
   workoutRepo: {
     createWorkoutSession: mocks.createWorkoutSession,
@@ -140,5 +142,76 @@ describe('previous working-set results', () => {
       previousWorkingWeight: 50,
       previousWorkingReps: [7, 7, 6],
     });
+  });
+});
+
+describe('exercise rename during workout', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.updateExercise.mockResolvedValue(undefined);
+    mocks.saveWorkoutState.mockResolvedValue(undefined);
+    useWorkoutStore.setState({
+      session: {
+        id: 'session-rename',
+        dayTypeId: 1,
+        direction: 'normal',
+        date: '2026-09-05T10:00:00.000Z',
+        timeStart: '2026-09-05T10:00:00.000Z',
+        timeEnd: null,
+        weightBefore: null,
+        weightAfter: null,
+        totalKg: 0,
+        notes: null,
+      },
+      isActive: true,
+      exercises: [{
+        exercise: {
+          id: 'exercise-rename',
+          dayTypeId: 1,
+          name: 'Жим лежа',
+          sortOrder: 1,
+          hasAddedWeight: true,
+          workingWeight: 50,
+          weightIncrement: 2.5,
+          warmup1Percent: null,
+          warmup2Percent: null,
+          warmup1Reps: 12,
+          warmup2Reps: 10,
+          maxRepsPerSet: 8,
+          minRepsPerSet: 4,
+          numWorkingSets: 3,
+          isTimed: false,
+          timerDurationSeconds: null,
+          timerPrepSeconds: null,
+          isActive: true,
+        },
+        sets: [],
+        status: 'not_started',
+        isPriority: false,
+        originalSets: null,
+      }],
+      currentExerciseIndex: 0,
+      _isRestoring: false,
+    });
+  });
+
+  it('updates the exercise repository and active workout snapshot', async () => {
+    await useWorkoutStore.getState().renameExercise(0, '  Жим лёжа  ');
+
+    expect(mocks.updateExercise).toHaveBeenCalledWith('exercise-rename', {
+      name: 'Жим лёжа',
+    });
+    expect(useWorkoutStore.getState().exercises[0]?.exercise.name).toBe('Жим лёжа');
+    await vi.waitFor(() => expect(mocks.saveWorkoutState).toHaveBeenCalled());
+    expect(mocks.saveWorkoutState.mock.calls.at(-1)?.[1].exercises[0].exercise.name)
+      .toBe('Жим лёжа');
+  });
+
+  it('keeps the active name unchanged when local saving fails', async () => {
+    mocks.updateExercise.mockRejectedValueOnce(new Error('SQLite failure'));
+
+    await expect(useWorkoutStore.getState().renameExercise(0, 'Новое название'))
+      .rejects.toThrow('SQLite failure');
+    expect(useWorkoutStore.getState().exercises[0]?.exercise.name).toBe('Жим лежа');
   });
 });

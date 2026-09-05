@@ -82,6 +82,7 @@ export interface WorkoutState {
   restoreWorkout: (snapshot: WorkoutSnapshot) => void;
   setCurrentExercise: (index: number) => void;
   getCurrentExercise: () => ActiveExercise | null;
+  renameExercise: (exerciseIndex: number, name: string) => Promise<void>;
   completeSet: (exerciseIndex: number, setIndex: number, actualReps?: number) => void;
   updateSetReps: (exerciseIndex: number, setIndex: number, reps: number) => void;
   skipExercise: (exerciseIndex: number) => void;
@@ -502,6 +503,25 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
   getCurrentExercise: () => {
     const state = get();
     return state.exercises[state.currentExerciseIndex] ?? null;
+  },
+
+  renameExercise: async (exerciseIndex, name) => {
+    const trimmedName = name.trim();
+    const activeExercise = get().exercises[exerciseIndex];
+    if (!activeExercise || !trimmedName || activeExercise.exercise.name === trimmedName) {
+      return;
+    }
+
+    const exerciseId = activeExercise.exercise.id;
+    await exerciseRepo.updateExercise(exerciseId, { name: trimmedName });
+    set((state) => ({
+      exercises: state.exercises.map((item) =>
+        item.exercise.id === exerciseId
+          ? { ...item, exercise: { ...item.exercise, name: trimmedName } }
+          : item
+      ),
+    }));
+    persistState(get());
   },
 
   // =======================================

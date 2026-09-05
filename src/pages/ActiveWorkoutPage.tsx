@@ -19,6 +19,7 @@ import {
   WorkoutHeader,
   ExerciseNavGrid,
   ExerciseCard,
+  ExerciseNameEditModal,
   RestTimer,
   ConfirmModal,
   ExercisesReview,
@@ -47,6 +48,7 @@ export function ActiveWorkoutPage() {
   const enterPostFinish = useWorkoutStore((s) => s.enterPostFinish);
   const finishWorkout = useWorkoutStore((s) => s.finishWorkout);
   const updateWeightBefore = useWorkoutStore((s) => s.updateWeightBefore);
+  const renameExercise = useWorkoutStore((s) => s.renameExercise);
 
   const refreshNextDayInfo = useAppStore((s) => s.refreshNextDayInfo);
 
@@ -57,6 +59,7 @@ export function ActiveWorkoutPage() {
   const [showFinishConfirm, setShowFinishConfirm] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [showWeightEdit, setShowWeightEdit] = useState(false);
+  const [renamingExerciseIndex, setRenamingExerciseIndex] = useState<number | null>(null);
 
   // Refs for scrolling
   const exerciseRefs = useRef<Map<number, HTMLDivElement>>(new Map());
@@ -178,6 +181,14 @@ export function ActiveWorkoutPage() {
     [updateWeightBefore]
   );
 
+  const handleExerciseNameSave = useCallback(
+    async (name: string) => {
+      if (renamingExerciseIndex === null) return;
+      await renameExercise(renamingExerciseIndex, name);
+    },
+    [renameExercise, renamingExerciseIndex]
+  );
+
   // ---- Scroll helpers ----
 
   const scrollToExercise = (index: number) => {
@@ -280,6 +291,7 @@ export function ActiveWorkoutPage() {
                 dayTypeId={session.dayTypeId}
                 onCompleteSet={handleCompleteSet}
                 onUpdateSetReps={handleUpdateSetReps}
+                onRename={setRenamingExerciseIndex}
                 onSkip={handleSkipRequest}
                 onUnskip={handleUnskip}
               />
@@ -297,6 +309,15 @@ export function ActiveWorkoutPage() {
         showWeightAfter={false}
         onClose={() => setShowWeightEdit(false)}
         onSave={handleWeightBeforeSave}
+      />
+
+      <ExerciseNameEditModal
+        isOpen={renamingExerciseIndex !== null}
+        name={renamingExerciseIndex === null
+          ? ''
+          : exercises[renamingExerciseIndex]?.exercise.name ?? ''}
+        onClose={() => setRenamingExerciseIndex(null)}
+        onSave={handleExerciseNameSave}
       />
 
       {/* Cancel confirmation — step 1 */}
