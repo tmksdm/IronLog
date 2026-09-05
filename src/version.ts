@@ -5,7 +5,7 @@
  * Update this file with each release.
  */
 
-export const APP_VERSION = '0.26.9';
+export const APP_VERSION = '0.26.10';
 
 export interface ChangelogEntry {
   version: string;
@@ -14,6 +14,15 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+
+  {
+    version: '0.26.10',
+    date: '2026-09-05',
+    changes: [
+      'Обновление теперь восстанавливает даже уже открывшийся белый экран.',
+      'Предыдущий кэш сохраняется до безопасного перехода открытых окон на новую версию.',
+    ],
+  },
 
   {
     version: '0.26.9',

@@ -69,7 +69,8 @@ function controlledUpdateServiceWorkerPlugin(base: string) {
       const files = listBuildFiles(outDir)
         .filter((file) => file !== 'sw.js' && file !== 'version.json')
         .map((file) => `${base}${file}`);
-      const source = `const CACHE_NAME = ${JSON.stringify(`ironlog-${version}`)};
+      const source = `const CACHE_PREFIX = "ironlog-";
+const CACHE_NAME = ${JSON.stringify(`ironlog-${version}`)};
 const PRECACHE_URLS = ${JSON.stringify(files)};
 const APP_SHELL = ${JSON.stringify(`${base}index.html`)};
 
@@ -85,14 +86,44 @@ self.addEventListener('message', (event) => {
   if (event.data?.type === 'SKIP_WAITING') self.skipWaiting();
 });
 
-self.addEventListener('activate', (event) => {
-  event.waitUntil(self.clients.claim());
-});
-
 function deleteOldCaches() {
   return caches.keys()
-    .then((names) => Promise.all(names.filter((name) => name.startsWith('ironlog-') && name !== CACHE_NAME).map((name) => caches.delete(name))));
+    .then((names) => {
+      const previousCaches = names
+        .filter((name) => name.startsWith(CACHE_PREFIX) && name !== CACHE_NAME)
+        .slice(-1);
+      const keep = new Set([CACHE_NAME, ...previousCaches]);
+      return Promise.all(
+        names
+          .filter((name) => name.startsWith(CACHE_PREFIX) && !keep.has(name))
+          .map((name) => caches.delete(name))
+      );
+    });
 }
+
+self.addEventListener('activate', (event) => {
+  event.waitUntil((async () => {
+    const cacheNames = await caches.keys();
+    const isUpdate = cacheNames.some(
+      (name) => name.startsWith(CACHE_PREFIX) && name !== CACHE_NAME
+    );
+
+    await self.clients.claim();
+
+    // A broken page cannot listen for controllerchange. Reload it from the
+    // worker itself so an update can recover a blank screen without clearing data.
+    if (isUpdate) {
+      const windowClients = await self.clients.matchAll({ type: 'window' });
+      await Promise.all(
+        windowClients.map((client) => typeof client.navigate === 'function'
+          ? client.navigate(client.url).catch(() => undefined)
+          : Promise.resolve())
+      );
+    }
+
+    await deleteOldCaches();
+  })());
+});
 
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
@@ -102,7 +133,6 @@ self.addEventListener('fetch', (event) => {
   if (event.request.mode === 'navigate') {
     const response = caches.open(CACHE_NAME).then((cache) => cache.match(APP_SHELL)).then((cached) => cached || fetch(event.request));
     event.respondWith(response);
-    event.waitUntil(response.then(() => deleteOldCaches()));
     return;
   }
 
