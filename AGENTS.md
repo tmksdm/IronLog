@@ -10,5 +10,6 @@
 - Перед релизом обновлять одинаковую версию в `package.json` и `src/version.ts`, добавлять запись в `CHANGELOG`.
 - Обязательные проверки: `npm run lint`, `npm test`, `npm run build`, `npm run build:ghpages`, `npm run build:android`, `npm audit --audit-level=high`.
 - Не коммитить и не пушить без явной просьбы пользователя.
+- На текущей машине нет `winget` и GitHub CLI. Не пытаться устанавливать `gh`; ручные GitHub Actions запускать через доступный GitHub-коннектор или авторизованный браузер.
 
 Долговременные цели находятся в `APP_BRIEF.md`, текущее состояние — в `docs/PROJECT_STATE.md`, значимые архитектурные решения — в `docs/DECISIONS.md`.
