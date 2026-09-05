@@ -5,7 +5,7 @@
  * Update this file with each release.
  */
 
-export const APP_VERSION = '0.26.8';
+export const APP_VERSION = '0.26.9';
 
 export interface ChangelogEntry {
   version: string;
@@ -14,6 +14,14 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+
+  {
+    version: '0.26.9',
+    date: '2026-09-05',
+    changes: [
+      'Длинные названия упражнений снова показываются полностью и переносятся на новые строки.',
+    ],
+  },
 
   {
     version: '0.26.8',

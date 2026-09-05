@@ -9,7 +9,7 @@ import type { ActiveExercise } from '../../stores/workoutStore';
 import { SetRow } from './SetRow';
 import { Card } from '../ui';
 import { formatDecimal, formatWeight } from '../../utils/format';
-import { Ban, Pencil, RotateCcw, Star } from 'lucide-react';
+import { Ban, RotateCcw, Star } from 'lucide-react';
 import { getDayTypeColor } from '../../theme';
 
 interface ExerciseCardProps {
@@ -83,12 +83,13 @@ export function ExerciseCard({
           </div>
           <button
             type="button"
-            className="flex max-w-full items-center gap-2 rounded-lg text-left active:bg-white/10"
+            className="block max-w-full rounded-lg text-left active:bg-white/10"
             onClick={() => onRename(exerciseIndex)}
             aria-label={`Изменить название упражнения «${exercise.name}»`}
           >
-            <span className="truncate text-lg font-bold text-white">{exercise.name}</span>
-            <Pencil size={15} className="shrink-0 text-[#8A8A8A]" aria-hidden="true" />
+            <span className="whitespace-normal break-words text-lg font-bold text-white">
+              {exercise.name}
+            </span>
           </button>
         </div>
 
