@@ -30,13 +30,6 @@
       "severity": "high",
       "scope": "dev",
       "reason": "Транзитивная зависимость glob/minimatch в dev-цепочке. В бандл приложения не входит."
-    },
-    {
-      "package": "source-map-js",
-      "advisory": "GHSA-68fv-2mgg-jv7q",
-      "severity": "high",
-      "scope": "dev",
-      "reason": "Транзитивная зависимость сборочной цепочки (source-map). В бандл приложения не входит."
     }
   ]
 }
