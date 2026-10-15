@@ -45,60 +45,19 @@ jobs:
       - name: Build (GitHub Pages)
         run: npm run build:ghpages
 
-      # Hard gate: only shipped dependencies. This check must pass.
+      # Hard gate for the shipped surface: production dependencies only.
       - name: npm audit — production dependencies (hard gate)
         run: npm audit --omit=dev --audit-level=high
 
-      # Informational: the full report is published and never presented as a
-      # passed check. Known dev-only advisories are closed in Stage 05.
-      # continue-on-error keeps the job usable while the step itself is marked
-      # as failed, so the audit result is not hidden behind a green step.
-      - name: npm audit — full report (informational)
-        continue-on-error: true
+      # Full audit. The step passes only while the report matches the explicit
+      # list of known advisories (scripts/ci/known-audit-advisories.json).
+      # A new advisory, a severity increase, or an unreadable report fails here,
+      # so a green step never hides an unexamined vulnerability. Known entries
+      # are reported in the job summary and are NOT treated as fixed.
+      - name: npm audit — full report vs known advisories
         run: |
           npm audit --json > audit-full.json 2>/dev/null || true
-          if [ ! -s audit-full.json ]; then
-            echo "npm audit не вернул отчёт." >> "$GITHUB_STEP_SUMMARY"
-            echo "::warning::npm audit не вернул отчёт"
-            exit 1
-          fi
-
-          INFO=$(jq -r '.metadata.vulnerabilities.info // 0' audit-full.json)
-          LOW=$(jq -r '.metadata.vulnerabilities.low // 0' audit-full.json)
-          MODERATE=$(jq -r '.metadata.vulnerabilities.moderate // 0' audit-full.json)
-          HIGH=$(jq -r '.metadata.vulnerabilities.high // 0' audit-full.json)
-          CRITICAL=$(jq -r '.metadata.vulnerabilities.critical // 0' audit-full.json)
-          TOTAL=$(jq -r '.metadata.vulnerabilities.total // 0' audit-full.json)
-
-          {
-            echo "## npm audit — полный отчёт (справочно)"
-            echo ""
-            echo "| severity | количество |"
-            echo "|---|---|"
-            echo "| critical | $CRITICAL |"
-            echo "| high | $HIGH |"
-            echo "| moderate | $MODERATE |"
-            echo "| low | $LOW |"
-            echo "| info | $INFO |"
-            echo "| **всего** | **$TOTAL** |"
-            echo ""
-            echo "**Эта проверка не считается пройденной.** Жёсткий гейт для"
-            echo "production-зависимостей — отдельный шаг выше. Известные"
-            echo "dev-уязвимости закрываются в Stage 05 и перечисляются в"
-            echo "PROJECT_STATE.md."
-            echo ""
-            echo "<details><summary>Затронутые пакеты</summary>"
-            echo ""
-            echo '```'
-            jq -r '.vulnerabilities | to_entries[] | "\(.key) — \(.value.severity) — \(.value.via[0].title // .value.via[0] // "")"' audit-full.json
-            echo '```'
-            echo "</details>"
-          } >> "$GITHUB_STEP_SUMMARY"
-
-          if [ "$TOTAL" -gt 0 ]; then
-            echo "::warning::npm audit: всего $TOTAL (critical=$CRITICAL, high=$HIGH, moderate=$MODERATE). Полный отчёт — артефакт npm-audit-full."
-            exit 1
-          fi
+          node scripts/ci/check-audit.mjs audit-full.json scripts/ci/known-audit-advisories.json "$GITHUB_STEP_SUMMARY"
 
       - name: Upload npm audit report
         if: always()
