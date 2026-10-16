@@ -329,6 +329,59 @@ export function load() {
   });
 });
 
+describe('intermediate objects of the client are not followed', () => {
+  it('rejects saving the auth object and calling a forbidden member through it', () => {
+    const result = analyzeSources(`import { supabase } from './client';
+const auth = supabase.auth;
+export function load() {
+  return auth.getUser();
+}`);
+    expect(kindsOf(result)).toContain('unanalyzable-form');
+    // Reported where the object is detached, so the later call can never slip by.
+    expect(result.violations[0].line).toBe(2);
+  });
+
+  it('rejects saving the auth object even when the later call is supported', () => {
+    const result = analyzeSources(`import { supabase } from './client';
+const auth = supabase.auth;
+export function load() {
+  return auth.getSession();
+}`);
+    expect(kindsOf(result)).toContain('unanalyzable-form');
+  });
+
+  it('still accepts the same path when it is called directly', () => {
+    const result = analyzeSources(
+      `${IMPORT}export function load() {
+  return supabase.auth.getSession();
+}`
+    );
+    expect(result.violations).toEqual([]);
+  });
+
+  it('rejects passing the auth object into a function', () => {
+    const result = analyzeSources(`${IMPORT}export function register(use: (auth: unknown) => void) {
+  use(supabase.auth);
+}`);
+    expect(kindsOf(result)).toEqual(['unanalyzable-form']);
+  });
+
+  it('rejects destructuring methods out of the auth object', () => {
+    const result = analyzeSources(`${IMPORT}const { getSession } = supabase.auth;
+export function load() {
+  return getSession();
+}`);
+    expect(kindsOf(result)).toEqual(['unanalyzable-form']);
+  });
+
+  it('rejects taking a method reference instead of calling it', () => {
+    const result = analyzeSources(
+      `${IMPORT}export const signOut = supabase.auth.signOut;`
+    );
+    expect(kindsOf(result)).toEqual(['unanalyzable-form']);
+  });
+});
+
 describe('the analyzer fails closed on its own inputs', () => {
   it('refuses a client module without the export', () => {
     const program = createVirtualProgram({

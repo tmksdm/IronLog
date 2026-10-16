@@ -10,9 +10,11 @@
 //
 // The check resolves every member access on the client through the TypeScript
 // symbol/type checker — not through text — and compares the path against the
-// stub's own type. Whatever the analyzer cannot resolve (destructuring the
-// client, passing it around, dynamic keys) is reported as a violation instead of
-// being skipped: the check fails closed.
+// stub's own type. A chain is only accepted while it is being called: whatever
+// the analyzer cannot follow to the end (destructuring the client, passing it or
+// one of its intermediate objects around, saving `supabase.auth` in a variable,
+// a method reference, a dynamic key) is reported as a violation instead of being
+// skipped. The check fails closed.
 //
 // The list of substituted modules is read from vite.config.ts itself, so the
 // exemption list cannot drift from the build configuration.
@@ -310,6 +312,21 @@ export function analyzeProgram({
       }
       walked.push(segment);
       type = member.type;
+    }
+
+    // A chain is only checkable while it is being called. Saving, passing or
+    // destructuring anything along it — `const auth = supabase.auth` above all —
+    // hands the next call site an object this walk no longer follows, so it is
+    // reported instead of being trusted.
+    const consumer = current.parent;
+    if (!(ts.isCallExpression(consumer) && consumer.expression === current)) {
+      report(
+        sourceFile,
+        base,
+        'unanalyzable-form',
+        `«${segments.join('.')}» используется как значение: дальнейшие обращения ` +
+          'через него анализатору не видны'
+      );
     }
   };
 
