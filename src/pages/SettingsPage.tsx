@@ -24,7 +24,7 @@ import { exportAsJSON, exportAsCSV, pickAndParseBackup, restoreFromBackup } from
 import type { ImportPreview } from '../utils';
 import { useAppStore } from '../stores/appStore';
 import { APP_VERSION, CHANGELOG } from '../version';
-import { supabase } from '../lib/supabase';
+import { CLOUD_ENABLED, supabase } from '../lib/supabase';
 
 // ==========================================
 // Menu item component
@@ -323,23 +323,27 @@ export function SettingsPage() {
           />
         </Section>
 
-        {/* Sync diagnostics (temporary debug) */}
-        <Section title="Диагностика">
-          <SyncDiagnostics />
-        </Section>
+        {/* Sync diagnostics (temporary debug, cloud builds only) */}
+        {CLOUD_ENABLED && (
+          <Section title="Диагностика">
+            <SyncDiagnostics />
+          </Section>
+        )}
 
         
         
-        {/* Account */}
-        <Section title="Аккаунт">
-          <MenuItem
-            icon={<LogOut size={20} className="text-red-400" />}
-            iconBgClass="bg-red-600/20"
-            label="Выйти"
-            sublabel="Выйти из аккаунта"
-            onClick={() => setShowLogoutConfirm(true)}
-          />
-        </Section>
+        {/* Account (cloud builds only) */}
+        {CLOUD_ENABLED && (
+          <Section title="Аккаунт">
+            <MenuItem
+              icon={<LogOut size={20} className="text-red-400" />}
+              iconBgClass="bg-red-600/20"
+              label="Выйти"
+              sublabel="Выйти из аккаунта"
+              onClick={() => setShowLogoutConfirm(true)}
+            />
+          </Section>
+        )}
 
         {/* About / Version */}
         <Section title="О приложении">

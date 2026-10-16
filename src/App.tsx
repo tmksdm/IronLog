@@ -11,7 +11,7 @@
 
 import { lazy, Suspense, useEffect, useState } from 'react';
 import { HashRouter, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
-import { supabase } from './lib/supabase';
+import { CLOUD_ENABLED, SUPABASE_PROJECT_REF, supabase } from './lib/supabase';
 import { useAppStore } from './stores/appStore';
 import { LoadingScreen, StartupErrorScreen } from './components/ui';
 import { BottomNav } from './components/layout';
@@ -85,7 +85,7 @@ function useRedirectOnLaunch() {
  */
 function hasLocalSupabaseSession(): boolean {
   try {
-    const projectRef = 'khnepdfkjwpxwtbjvqiv';
+    const projectRef = SUPABASE_PROJECT_REF;
     const key = `sb-${projectRef}-auth-token`;
     const stored = localStorage.getItem(key);
     if (!stored) return false;
@@ -140,14 +140,13 @@ function AppContent() {
   );
 }
 
-function App() {
+/**
+ * Cloud-gated application used by the production build. The test build has no
+ * cloud and therefore no authentication, so it never renders this component.
+ */
+function CloudGatedApp() {
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-
-  // Keep the PWA shell current without requiring a working screen to confirm it.
-  useEffect(() => {
-    return startUpdateChecker();
-  }, []);
 
   useEffect(() => {
     // FAST PATH: check localStorage for cached token (instant, no network).
@@ -227,6 +226,24 @@ function App() {
       <AppContent />
     </HashRouter>
   );
+}
+
+function App() {
+  // Keep the PWA shell current without requiring a working screen to confirm it.
+  useEffect(() => {
+    return startUpdateChecker();
+  }, []);
+
+  if (!CLOUD_ENABLED) {
+    // Test build: no cloud, no authentication — straight into the app.
+    return (
+      <HashRouter>
+        <AppContent />
+      </HashRouter>
+    );
+  }
+
+  return <CloudGatedApp />;
 }
 
 export default App;
