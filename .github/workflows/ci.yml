@@ -39,11 +39,44 @@ jobs:
       - name: Unit tests
         run: npm test
 
-      - name: Build (web)
-        run: npm run build
+      # Each build is verified before the next one overwrites dist/.
+      # The module graph proves that the cloud modules were substituted rather
+      # than tree-shaken away (see vite.config.ts, IRONLOG_MODULE_GRAPH).
+      - name: Build (test) and write module graph
+        run: IRONLOG_MODULE_GRAPH=node_modules/module-graph-test.txt npm run build:test
 
-      - name: Build (GitHub Pages)
-        run: npm run build:ghpages
+      - name: Verify test artifact and self-test the check
+        run: |
+          node scripts/ci/check-artifacts.mjs --mode test --dir dist \
+            --module-graph node_modules/module-graph-test.txt --self-test \
+            --summary "$GITHUB_STEP_SUMMARY"
+
+      - name: Build (web) and write module graph
+        run: IRONLOG_MODULE_GRAPH=node_modules/module-graph-web.txt npm run build
+
+      - name: Verify production web artifact
+        run: |
+          node scripts/ci/check-artifacts.mjs --mode production --dir dist \
+            --module-graph node_modules/module-graph-web.txt --self-test \
+            --summary "$GITHUB_STEP_SUMMARY"
+
+      - name: Build (GitHub Pages) and write module graph
+        run: IRONLOG_MODULE_GRAPH=node_modules/module-graph-ghpages.txt npm run build:ghpages
+
+      - name: Verify production GitHub Pages artifact
+        run: |
+          node scripts/ci/check-artifacts.mjs --mode production --dir dist \
+            --module-graph node_modules/module-graph-ghpages.txt \
+            --summary "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload build verification reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-verification
+          path: node_modules/module-graph-*.txt
+          if-no-files-found: warn
+          retention-days: 14
 
       # Hard gate for the shipped surface: production dependencies only.
       - name: npm audit — production dependencies (hard gate)

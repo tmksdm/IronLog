@@ -11,6 +11,13 @@
 /** The test build has no cloud and therefore no authentication. */
 export const CLOUD_ENABLED = false;
 
+/**
+ * Stable marker for the CI artifact check. Nothing imports this module by name:
+ * the marker can only reach the bundle if the resolver replaced the real client
+ * module, which is the isolation mechanism being verified.
+ */
+export const CLOUD_STUB_MARKER = 'ironlog-cloud-stub';
+
 /** No Supabase project is configured in the test build. */
 export const SUPABASE_PROJECT_REF = '';
 
@@ -23,13 +30,15 @@ export const supabase = {
       return { data: { subscription: { unsubscribe: () => {} } } };
     },
     async signInWithPassword(): Promise<{ error: Error }> {
-      return { error: new Error('Облако отключено в тестовой сборке') };
+      return { error: new Error(`${CLOUD_STUB_MARKER}: облако отключено в тестовой сборке`) };
     },
     async signOut(): Promise<{ error: null }> {
       return { error: null };
     },
   },
   from(): never {
-    throw new Error('Облако отключено в тестовой сборке: обращения к Supabase запрещены');
+    throw new Error(
+      `${CLOUD_STUB_MARKER}: обращения к Supabase запрещены в тестовой сборке`
+    );
   },
 };

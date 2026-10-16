@@ -293,6 +293,34 @@ function testBuildPlugin(enabled: boolean) {
   };
 }
 
+/**
+ * Writes a `sourceModule → chunk` map. Enabled only through the
+ * IRONLOG_MODULE_GRAPH environment variable and used by CI to prove that the
+ * cloud modules were substituted — and not merely tree-shaken away. It never
+ * changes the emitted bundle.
+ */
+function moduleGraphReporterPlugin(outputPath: string) {
+  return {
+    name: 'ironlog-module-graph',
+    apply: 'build' as const,
+    generateBundle(_options: unknown, bundle: Record<string, any>) {
+      const rows: string[] = [];
+      for (const [file, item] of Object.entries(bundle)) {
+        if (item.type !== 'chunk') continue;
+        for (const id of Object.keys(item.modules)) {
+          const normalized = String(id).replaceAll('\\', '/');
+          const at = normalized.lastIndexOf('/src/');
+          if (at === -1) continue;
+          rows.push(`${normalized.slice(at + '/src/'.length)}\t${file}`);
+        }
+      }
+      rows.sort();
+      writeFileSync(resolve(__dirname, outputPath), `${rows.join('\n')}\n`);
+      console.log(`Module graph written: ${outputPath} (${rows.length} entries)`);
+    },
+  };
+}
+
 export default defineConfig(({ mode }) => {
   // GitHub Pages needs '/IronLog/', everything else uses relative paths
   const isGitHubPages = mode === 'ghpages';
@@ -316,6 +344,9 @@ export default defineConfig(({ mode }) => {
       controlledUpdateServiceWorkerPlugin(base, isTestBuild ? 'ironlog-test-' : 'ironlog-'),
       // Keep last: the artifact check must run after every file has been written.
       testBuildPlugin(isTestBuild),
+      ...(process.env.IRONLOG_MODULE_GRAPH
+        ? [moduleGraphReporterPlugin(process.env.IRONLOG_MODULE_GRAPH)]
+        : []),
       {
         name: 'wasm-mime-type',
         configureServer(server) {
