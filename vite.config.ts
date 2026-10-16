@@ -364,14 +364,29 @@ export default defineConfig(({ mode }) => {
       emptyOutDir: true,
       rollupOptions: {
         output: {
-          manualChunks: {
-            'react-vendor': ['react', 'react-dom', 'react-router-dom'],
-            ...(isTestBuild ? {} : { 'supabase-vendor': ['@supabase/supabase-js'] }),
-            'sqlite-vendor': [
-              '@capacitor-community/sqlite',
-              'jeep-sqlite',
-              'sql.js',
-            ],
+          /**
+           * Vendors are grouped by package. Vite's dynamic-import helper is kept
+           * apart on purpose: it is shared by the entry and by the application
+           * chunk, and if Rollup folds it into a vendor chunk, the entry ends up
+           * statically importing that whole vendor — which would pull the SQLite
+           * stack into the static closure of the entry, before the host name is
+           * even checked (see scripts/ci/check-artifacts.mjs).
+           */
+          manualChunks(id) {
+            const normalized = String(id).replaceAll('\\', '/');
+            if (normalized.includes('vite/preload-helper')) return 'vite-helper';
+
+            const groups: Record<string, string[]> = {
+              'react-vendor': ['react', 'react-dom', 'react-router-dom'],
+              'sqlite-vendor': ['@capacitor-community/sqlite', 'jeep-sqlite', 'sql.js'],
+              ...(isTestBuild ? {} : { 'supabase-vendor': ['@supabase/supabase-js'] }),
+            };
+            for (const [chunk, packages] of Object.entries(groups)) {
+              if (packages.some((name) => normalized.includes(`/node_modules/${name}/`))) {
+                return chunk;
+              }
+            }
+            return undefined;
           },
         },
       },

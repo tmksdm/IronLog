@@ -5,11 +5,23 @@
 // deliberately damaged artifact must always be rejected.
 
 import { afterEach, describe, expect, it } from 'vitest';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-import { checkArtifact, selfTest } from './check-artifacts.mjs';
+import {
+  ENTRY_CLOSURE_ALLOWLIST,
+  ENTRY_DYNAMIC_IMPORTS,
+  ENTRY_SOURCE_IMPORTS,
+  checkArtifact,
+  checkEntryClosure,
+  readEntryImports,
+  selfTest,
+  selfTestEntryClosure,
+} from './check-artifacts.mjs';
+
+const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 
 const SECRETS = {
   url: 'https://testprojectref123.supabase.co',
@@ -46,6 +58,24 @@ function writeGraph(lines) {
   return path;
 }
 
+/** A worker shaped like the generated one: cache list, app shell and origin guard. */
+function workerSource({ prefix, base, urls, version = '0.0.0' }) {
+  return [
+    `const CACHE_PREFIX = ${JSON.stringify(prefix)};`,
+    `const CACHE_NAME = ${JSON.stringify(`${prefix}${version}`)};`,
+    `const PRECACHE_URLS = ${JSON.stringify(urls.map((url) => `${base}${url}`))};`,
+    `const APP_SHELL = ${JSON.stringify(`${base}index.html`)};`,
+    "self.addEventListener('fetch', (event) => { const url = new URL(event.request.url); if (url.origin !== self.location.origin || url.pathname.endsWith('/version.json')) return; });",
+  ].join('\n');
+}
+
+const TEST_WORKER_FILES = ['.nojekyll', 'assets/index-abc.js', 'index.html', 'manifest.json'];
+const PRODUCTION_WORKER_FILES = [
+  'assets/supabase-vendor-xyz.js',
+  'index.html',
+  'manifest.json',
+];
+
 function testArtifact(overrides = {}) {
   const dir = makeDir();
   write(dir, 'index.html', overrides.html ?? `<html><head>${CSP}</head><body></body></html>`);
@@ -63,7 +93,8 @@ function testArtifact(overrides = {}) {
   write(
     dir,
     'sw.js',
-    overrides.sw ?? 'const CACHE_PREFIX = "ironlog-test-";\nconst APP_SHELL = "./index.html";'
+    overrides.sw ??
+      workerSource({ prefix: 'ironlog-test-', base: './', urls: TEST_WORKER_FILES })
   );
   if (overrides.nojekyll !== false) write(dir, '.nojekyll', '');
   write(dir, 'assets/index-abc.js', overrides.bundle ?? "const marker = 'ironlog-cloud-stub';");
@@ -81,7 +112,8 @@ function productionArtifact(overrides = {}) {
   write(
     dir,
     'sw.js',
-    overrides.sw ?? 'const CACHE_PREFIX = "ironlog-";\nconst APP_SHELL = "/IronLog/index.html";'
+    overrides.sw ??
+      workerSource({ prefix: 'ironlog-', base: '/IronLog/', urls: PRODUCTION_WORKER_FILES })
   );
   write(
     dir,
@@ -151,7 +183,10 @@ describe('test artifact', () => {
 
   it('rejects a production cache prefix', () => {
     expect(
-      check('test', testArtifact({ sw: 'const CACHE_PREFIX = "ironlog-";\nconst APP_SHELL = "./index.html";' })).ok
+      check(
+        'test',
+        testArtifact({ sw: workerSource({ prefix: 'ironlog-', base: './', urls: TEST_WORKER_FILES }) })
+      ).ok
     ).toBe(false);
   });
 
@@ -203,7 +238,16 @@ describe('production artifact', () => {
       check('production', productionArtifact({ manifest: JSON.stringify({ name: 'IronLog Test', start_url: './' }) })).ok
     ).toBe(false);
     expect(
-      check('production', productionArtifact({ sw: 'const CACHE_PREFIX = "ironlog-test-";\nconst APP_SHELL = "./index.html";' })).ok
+      check(
+        'production',
+        productionArtifact({
+          sw: workerSource({
+            prefix: 'ironlog-test-',
+            base: '/IronLog/',
+            urls: PRODUCTION_WORKER_FILES,
+          }),
+        })
+      ).ok
     ).toBe(false);
     const withNojekyll = productionArtifact();
     write(withNojekyll, '.nojekyll', '');
@@ -222,7 +266,310 @@ describe('production artifact', () => {
   });
 });
 
-describe('self test', () => {
+describe('service worker rules', () => {
+  it('rejects a worker that could reach another origin', () => {
+    const result = check(
+      'test',
+      testArtifact({
+        sw: `${workerSource({ prefix: 'ironlog-test-', base: './', urls: TEST_WORKER_FILES })}\nfetch('https://example.com/ping');`,
+      })
+    );
+    expect(result.ok).toBe(false);
+    expect(result.errors.join(' ')).toContain('внешний URL');
+  });
+
+  it('rejects a worker without the origin guard', () => {
+    const result = check(
+      'test',
+      testArtifact({
+        sw: workerSource({ prefix: 'ironlog-test-', base: './', urls: TEST_WORKER_FILES }).replace(
+          /url\.origin !== self\.location\.origin \|\| /,
+          ''
+        ),
+      })
+    );
+    expect(result.ok).toBe(false);
+    expect(result.errors.join(' ')).toContain('проверки origin');
+  });
+
+  it('rejects a cache entry outside the origin or missing from the artifact', () => {
+    const outside = check(
+      'test',
+      testArtifact({
+        sw: [
+          'const CACHE_PREFIX = "ironlog-test-";',
+          'const PRECACHE_URLS = ["https://cdn.example.com/x.js","./index.html"];',
+          'const APP_SHELL = "./index.html";',
+          "self.addEventListener('fetch', (event) => { if (url.origin !== self.location.origin) return; });",
+        ].join('\n'),
+      })
+    );
+    expect(outside.ok).toBe(false);
+    expect(outside.errors.join(' ')).toContain('за пределами origin');
+
+    const phantom = check(
+      'test',
+      testArtifact({
+        sw: workerSource({
+          prefix: 'ironlog-test-',
+          base: './',
+          urls: [...TEST_WORKER_FILES, 'assets/ghost.js'],
+        }),
+      })
+    );
+    expect(phantom.ok).toBe(false);
+    expect(phantom.errors.join(' ')).toContain('которых нет в артефакте');
+  });
+
+  it('rejects version.json inside the offline shell cache', () => {
+    const dir = testArtifact({
+      sw: workerSource({
+        prefix: 'ironlog-test-',
+        base: './',
+        urls: [...TEST_WORKER_FILES, 'version.json'],
+      }),
+    });
+    write(dir, 'version.json', '{"version":"0.0.0"}');
+    const result = check('test', dir);
+    expect(result.ok).toBe(false);
+    expect(result.errors.join(' ')).toContain('version.json попал в кэш');
+  });
+
+  it('rejects a build file that is not precached', () => {
+    const result = check(
+      'test',
+      testArtifact({
+        sw: workerSource({
+          prefix: 'ironlog-test-',
+          base: './',
+          urls: TEST_WORKER_FILES.filter((file) => file !== 'assets/index-abc.js'),
+        }),
+      })
+    );
+    expect(result.ok).toBe(false);
+    expect(result.errors.join(' ')).toContain('не попали файлы сборки');
+  });
+});
+
+// ------------------------------------------------------------ entry closure
+
+const CLOSURE_ENTRY_MODULES = [
+  'main.tsx',
+  'lib/buildTarget.ts',
+  'lib/entryGate.ts',
+  'components/ui/HostGuard.tsx',
+  'components/ui/AppErrorBoundary.tsx',
+  'components/ui/EntryLoadErrorScreen.tsx',
+  'index.css',
+];
+
+const ENTRY_IMPORTS = {
+  staticImports: [...ENTRY_SOURCE_IMPORTS],
+  dynamicImports: [...ENTRY_DYNAMIC_IMPORTS],
+};
+
+function closureArtifact(overrides = {}) {
+  const dir = makeDir();
+  write(
+    dir,
+    'index.html',
+    overrides.html ??
+      '<html><head><script type="module" src="./assets/index-entry.js"></script></head><body></body></html>'
+  );
+  write(
+    dir,
+    'assets/index-entry.js',
+    overrides.entry ?? 'import "./vite-helper.js";\nimport "./react-vendor.js";\nvoid import("./App.js");\n'
+  );
+  write(dir, 'assets/vite-helper.js', 'export const helper = 1;\n');
+  write(dir, 'assets/react-vendor.js', 'export const react = 1;\n');
+  write(
+    dir,
+    'assets/App.js',
+    overrides.app ?? 'import "./sqlite-vendor.js";\nexport default 1;\n'
+  );
+  write(
+    dir,
+    'assets/sqlite-vendor.js',
+    overrides.vendor ?? 'class SQLiteConnection {}\nexport {};\n'
+  );
+  return dir;
+}
+
+function closureGraph(extraRows = []) {
+  return writeGraph([
+    ...CLOSURE_ENTRY_MODULES.map((module) => `${module}\tassets/index-entry.js`),
+    'App.tsx\tassets/App.js',
+    ...extraRows,
+  ]);
+}
+
+const checkClosure = (dir, moduleGraph, entryImports = ENTRY_IMPORTS) =>
+  checkEntryClosure({ dir, moduleGraph, entryImports, secrets: SECRETS });
+
+describe('entry closure', () => {
+  it('accepts an artifact whose entry reaches only the gate', () => {
+    const result = checkClosure(closureArtifact(), closureGraph());
+    expect(result.errors).toEqual([]);
+    expect(result.ok).toBe(true);
+  });
+
+  it('rejects a static import of the application chunk', () => {
+    const dir = closureArtifact({
+      entry: 'import "./App.js";\nvoid import("./vite-helper.js");\n',
+    });
+    const result = checkClosure(dir, closureGraph());
+    expect(result.ok).toBe(false);
+    expect(result.errors.join(' ')).toContain('оказался модуль App.tsx');
+  });
+
+  it('rejects a vendor chunk by its content, not by its name', () => {
+    const dir = closureArtifact({ entry: 'import "./sqlite-vendor.js";\n' });
+    const result = checkClosure(dir, closureGraph());
+    expect(result.ok).toBe(false);
+    expect(result.errors.join(' ')).toContain('SQLiteConnection');
+  });
+
+  it('rejects a credential inside the closure', () => {
+    const dir = closureArtifact({
+      entry: `import "./vite-helper.js";\nexport const leaked = '${SECRETS.url}';\n`,
+    });
+    const result = checkClosure(dir, closureGraph());
+    expect(result.ok).toBe(false);
+    expect(result.errors.join(' ')).toContain('production credential');
+  });
+
+  it('rejects modulepreload of the application chunk', () => {
+    const dir = closureArtifact({
+      html: '<html><head><script type="module" src="./assets/index-entry.js"></script><link rel="modulepreload" href="./assets/App.js"></head></html>',
+    });
+    const result = checkClosure(dir, closureGraph());
+    expect(result.ok).toBe(false);
+    expect(result.errors.join(' ')).toContain('modulepreload');
+  });
+
+  it('rejects an incomplete module graph', () => {
+    const graph = writeGraph([
+      ...CLOSURE_ENTRY_MODULES.filter((module) => module !== 'lib/entryGate.ts').map(
+        (module) => `${module}\tassets/index-entry.js`
+      ),
+      'App.tsx\tassets/App.js',
+    ]);
+    const result = checkClosure(closureArtifact(), graph);
+    expect(result.ok).toBe(false);
+    expect(result.errors.join(' ')).toContain('нет модуля lib/entryGate.ts');
+  });
+
+  it('rejects an empty or missing module graph', () => {
+    expect(checkClosure(closureArtifact(), writeGraph([])).errors.join(' ')).toContain('граф модулей пуст');
+    expect(checkClosure(closureArtifact(), '').errors.join(' ')).toContain('граф модулей не передан');
+  });
+
+  it('requires exactly one module script', () => {
+    const two = closureArtifact({
+      html: '<html><head><script type="module" src="./assets/index-entry.js"></script><script type="module" src="./assets/App.js"></script></head></html>',
+    });
+    expect(checkClosure(two, closureGraph()).errors.join(' ')).toContain('2 module-скриптов');
+    const none = closureArtifact({ html: '<html><head></head></html>' });
+    expect(checkClosure(none, closureGraph()).errors.join(' ')).toContain('0 module-скриптов');
+  });
+
+  it('rejects entry imports that changed in the source', () => {
+    const extra = {
+      staticImports: [...ENTRY_SOURCE_IMPORTS, './lib/supabase'],
+      dynamicImports: [...ENTRY_DYNAMIC_IMPORTS],
+    };
+    expect(checkClosure(closureArtifact(), closureGraph(), extra).errors.join(' ')).toContain(
+      'не совпадают с разрешёнными'
+    );
+
+    const otherDynamic = {
+      staticImports: [...ENTRY_SOURCE_IMPORTS],
+      dynamicImports: ['../App'],
+    };
+    expect(checkClosure(closureArtifact(), closureGraph(), otherDynamic).errors.join(' ')).toContain(
+      'динамические импорты'
+    );
+  });
+
+  it('fails closed when the source import list is missing', () => {
+    const result = checkClosure(closureArtifact(), closureGraph(), null);
+    expect(result.ok).toBe(false);
+    expect(result.errors.join(' ')).toContain('не передан');
+  });
+});
+
+describe('entry closure self test', () => {
+  it('rejects every prepared damage and accepts the untouched artifact', () => {
+    const result = selfTestEntryClosure({
+      dir: closureArtifact(),
+      moduleGraph: closureGraph(),
+      entryImports: ENTRY_IMPORTS,
+      secrets: SECRETS,
+    });
+    expect(result.cases.map((item) => item.name)).toEqual([
+      'неповреждённый артефакт',
+      'статический импорт app-чанка в entry',
+      'статический импорт вендорного чанка с запрещённым содержимым',
+      'неполный граф модулей',
+      'modulepreload для app-чанка',
+      'нет module-скрипта в index.html',
+    ]);
+    expect(result.cases.filter((item) => !item.ok)).toEqual([]);
+    expect(result.ok).toBe(true);
+  });
+
+  it('fails closed when the artifact has no entry script', () => {
+    const result = selfTestEntryClosure({
+      dir: closureArtifact({ html: '<html><head></head></html>' }),
+      moduleGraph: closureGraph(),
+      entryImports: ENTRY_IMPORTS,
+      secrets: SECRETS,
+    });
+    expect(result.ok).toBe(false);
+    expect(result.detail).toContain('entry-чанк не найден');
+  });
+
+  it('does not modify the original artifact', () => {
+    const dir = closureArtifact();
+    const entry = readFileSync(resolve(dir, 'assets/index-entry.js'), 'utf-8');
+    selfTestEntryClosure({
+      dir,
+      moduleGraph: closureGraph(),
+      entryImports: ENTRY_IMPORTS,
+      secrets: SECRETS,
+    });
+    expect(readFileSync(resolve(dir, 'assets/index-entry.js'), 'utf-8')).toBe(entry);
+    expect(checkClosure(dir, closureGraph()).ok).toBe(true);
+  });
+});
+
+describe('reading the entry source', () => {
+  it('reads the real entry imports and matches the allowed list', () => {
+    const result = readEntryImports(REPO_ROOT);
+    expect([...new Set(result.staticImports)].sort()).toEqual([...ENTRY_SOURCE_IMPORTS].sort());
+    expect(result.dynamicImports).toEqual([...ENTRY_DYNAMIC_IMPORTS]);
+    expect(ENTRY_CLOSURE_ALLOWLIST).toContain('main.tsx');
+  });
+
+  it('ignores comments and reads dynamic calls separately', () => {
+    const root = makeDir();
+    write(
+      root,
+      'src/main.tsx',
+      "// import './App' is deliberately dynamic\nimport { x } from './x';\nvoid import('./App');\n"
+    );
+    const result = readEntryImports(root);
+    expect(result.staticImports).toEqual(['./x']);
+    expect(result.dynamicImports).toEqual(['./App']);
+  });
+
+  it('fails closed when the entry module is missing', () => {
+    expect(() => readEntryImports(makeDir())).toThrow(/нет src\/main\.tsx/);
+  });
+});
+
+describe('mode self test', () => {
   it('proves the test-mode check rejects an injected credential', () => {
     const result = selfTest({ mode: 'test', dir: testArtifact(), secrets: SECRETS });
     expect(result.detail).toBeTruthy();

@@ -6,6 +6,11 @@
  *
  * Because the children are never rendered, no store effect runs: the local
  * database is not opened, no authentication is attempted and no sync is started.
+ *
+ * `BlockedHostScreen` is also what src/main.tsx renders when the earlier host
+ * check (src/lib/entryGate.ts) refuses the hostname and the application module is
+ * not imported at all. It is exported so both layers show exactly the same screen
+ * instead of keeping two copies of it.
  */
 
 import type { ReactNode } from 'react';
@@ -17,7 +22,7 @@ interface BlockedHostScreenProps {
   buildKind: BuildKind;
 }
 
-function BlockedHostScreen({ hostname, reason, buildKind }: BlockedHostScreenProps) {
+export function BlockedHostScreen({ hostname, reason, buildKind }: BlockedHostScreenProps) {
   return (
     <div className="min-h-screen bg-[#121212] flex items-center justify-center px-6">
       <div className="w-full max-w-120 text-center">

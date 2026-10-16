@@ -6,6 +6,7 @@ export { Modal } from './Modal';
 export { NumberStepper } from './NumberStepper';
 export { LoadingScreen } from './LoadingScreen';
 export { AppErrorBoundary } from './AppErrorBoundary';
-export { HostGuard } from './HostGuard';
+export { BlockedHostScreen, HostGuard } from './HostGuard';
+export { EntryLoadErrorScreen } from './EntryLoadErrorScreen';
 export { UpdatePrompt } from './UpdateBanner';
 export { StartupErrorScreen } from './StartupErrorScreen';
