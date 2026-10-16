@@ -21,22 +21,41 @@ export const CLOUD_STUB_MARKER = 'ironlog-cloud-stub';
 /** No Supabase project is configured in the test build. */
 export const SUPABASE_PROJECT_REF = '';
 
+/** Accepts the production arguments and forgets them: the cloud is not a target. */
+function ignoreCloudArguments(...args: unknown[]): void {
+  void args;
+}
+
 export const supabase = {
   auth: {
-    async getSession(): Promise<{ data: { session: null } }> {
-      return { data: { session: null } };
+    // Mirrors the real client's "no session, no error" response down to the
+    // `error` field, so call sites destructuring it see the same shape.
+    async getSession(): Promise<{ data: { session: null }; error: null }> {
+      return { data: { session: null }, error: null };
     },
-    onAuthStateChange(): { data: { subscription: { unsubscribe: () => void } } } {
+    // The callback is accepted and never invoked: without a cloud there are no
+    // auth events, so nothing can become "signed in" in the test build. Its
+    // parameters are typed `never` because that is exactly the set of arguments
+    // this build will ever pass to it.
+    onAuthStateChange(
+      callback: (event: never, session: never) => void
+    ): { data: { subscription: { unsubscribe: () => void } } } {
+      ignoreCloudArguments(callback);
       return { data: { subscription: { unsubscribe: () => {} } } };
     },
-    async signInWithPassword(): Promise<{ error: Error }> {
+    async signInWithPassword(credentials: {
+      email: string;
+      password: string;
+    }): Promise<{ error: Error }> {
+      ignoreCloudArguments(credentials);
       return { error: new Error(`${CLOUD_STUB_MARKER}: облако отключено в тестовой сборке`) };
     },
     async signOut(): Promise<{ error: null }> {
       return { error: null };
     },
   },
-  from(): never {
+  from(table: string): never {
+    ignoreCloudArguments(table);
     throw new Error(
       `${CLOUD_STUB_MARKER}: обращения к Supabase запрещены в тестовой сборке`
     );
