@@ -10,7 +10,7 @@
  * While the test hostname is not configured, an empty value is a fail-closed
  * configuration: the test build is allowed locally only. A test bundle that ends
  * up on an unknown hostname shows a blocking screen instead of silently running
- * as an app without a cloud.
+ * on a hostname it was not built for.
  *
  * Only hostnames are compared. Different paths on the same hostname belong to
  * one trust domain (the owner's own GitHub account, or a local dev server).

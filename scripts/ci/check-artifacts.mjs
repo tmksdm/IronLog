@@ -2,24 +2,23 @@
 //
 // Verifies a built bundle against the expectations of its build kind.
 //
-// Test build  — the cloud must be unreachable and the cloud modules replaced:
-//               no production credentials, no Supabase SDK, a CSP with
+// Test build  — the shell must identify itself as the test stand: a CSP with
 //               `connect-src 'self'`, the "IronLog Test" manifest, the test
-//               service-worker cache prefix and the stub marker.
-// Production  — the cloud must still be intact and the test-mode markers must
-//               be absent.
+//               service-worker cache prefix and `.nojekyll`.
+// Production  — those test-mode markers must be absent and the production
+//               manifest, cache prefix and start_url must be intact.
 //
 // Entry closure — the statically reachable closure of the entry chunk must
 //               contain the host gate and nothing else from the application: the
-//               application, the local database, the cloud modules, the stores
-//               and the service-worker registration may only be reached through
-//               a dynamic import that the gate performs after the hostname was
+//               application, the local database, the stores and the
+//               service-worker registration may only be reached through a
+//               dynamic import that the gate performs after the hostname was
 //               accepted. This is what makes "nothing runs before the host
 //               check" a property of the artifact instead of a hope.
 //
 // `--self-test` proves the checks themselves are not vacuous: it mutates copies
-// of the artifact (injects a credential for the test build, removes credentials
-// for the production build, adds static imports to the entry chunk, empties the
+// of the artifact (removes the CSP meta from the test shell, adds the test CSP
+// to a production shell, adds static imports to the entry chunk, empties the
 // module graph, removes the entry script) and fails unless every mutated copy is
 // rejected.
 //
@@ -44,21 +43,8 @@ import ts from 'typescript';
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 
-const STUB_MARKER = 'ironlog-cloud-stub';
-const SDK_MARKERS = [
-  'GoTrueClient',
-  'PostgrestClient',
-  'AuthApiError',
-  'supabase-js',
-  'postgrest',
-  'gotrue',
-];
-const CLOUD_MODULES = {
-  realClient: 'lib/supabase.ts',
-  stubClient: 'lib/supabase.disabled.ts',
-  realSync: 'lib/sync.ts',
-  stubSync: 'lib/sync.disabled.ts',
-};
+/** CSP meta of the test shell; the self-test reuses it to damage a production shell. */
+const TEST_CSP_META = `<meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src 'self'" />`;
 
 /** The entry module and the imports it is allowed to make. */
 const ENTRY_SOURCE = 'src/main.tsx';
@@ -93,25 +79,11 @@ export const ENTRY_CLOSURE_ALLOWLIST = [
  * allowed as chunks: whatever the closure reaches is inspected by its content.
  */
 const ENTRY_FORBIDDEN_MARKERS = [
-  ...SDK_MARKERS,
   'jeep-sqlite',
   'sql-wasm',
   'CapacitorSQLite',
   'SQLiteConnection',
-  STUB_MARKER,
 ];
-
-/** Production credentials, extracted from the source of truth. */
-export function extractCloudSecrets(rootDir = REPO_ROOT) {
-  const source = readFileSync(resolve(rootDir, 'src/lib/supabase.ts'), 'utf-8');
-  const url = source.match(/https:\/\/[a-z0-9-]+\.supabase\.co/)?.[0];
-  const key = source.match(/eyJ[A-Za-z0-9_-]{20,}/)?.[0];
-  const projectRef = url?.replace('https://', '').split('.')[0];
-  if (!url || !key || !projectRef) {
-    throw new Error('Не удалось извлечь credentials из src/lib/supabase.ts');
-  }
-  return { url, projectRef, keyPrefix: key.slice(0, 40) };
-}
 
 function listFiles(directory, root = directory) {
   return readdirSync(directory).flatMap((name) => {
@@ -150,7 +122,7 @@ function parseModuleGraphRows(path) {
 }
 
 /** Pure check: no I/O outside the given directory. */
-export function checkArtifact({ mode, dir, moduleGraph, secrets = extractCloudSecrets() }) {
+export function checkArtifact({ mode, dir, moduleGraph }) {
   const errors = [];
   const notes = [];
 
@@ -241,28 +213,7 @@ export function checkArtifact({ mode, dir, moduleGraph, secrets = extractCloudSe
     }
   }
 
-  const secretOccurrences = [];
-  for (const [file, buffer] of buffers) {
-    for (const secret of [secrets.url, secrets.projectRef, secrets.keyPrefix]) {
-      if (buffer.includes(Buffer.from(secret))) secretOccurrences.push(`${file} ← ${secret.slice(0, 20)}…`);
-    }
-  }
-
-  const sdkChunks = jsFiles.filter((file) =>
-    SDK_MARKERS.some((marker) => (textByFile.get(file) ?? '').includes(marker))
-  );
-  const vendorChunks = files.filter((file) => file.includes('supabase-vendor'));
-
   if (mode === 'test') {
-    if (secretOccurrences.length > 0) {
-      errors.push(`найдены credentials production Supabase: ${secretOccurrences.join(', ')}`);
-    }
-    if (sdkChunks.length > 0) {
-      errors.push(`найден Supabase SDK в чанках: ${sdkChunks.join(', ')}`);
-    }
-    if (vendorChunks.length > 0) {
-      errors.push(`найден чанк supabase-vendor: ${vendorChunks.join(', ')}`);
-    }
     if (!/Content-Security-Policy/.test(indexHtml)) {
       errors.push('в index.html нет меты Content-Security-Policy');
     } else if (!/connect-src 'self'/.test(indexHtml)) {
@@ -290,30 +241,8 @@ export function checkArtifact({ mode, dir, moduleGraph, secrets = extractCloudSe
     if (!files.includes('.nojekyll')) {
       errors.push('нет .nojekyll');
     }
-    if (!allText.includes(STUB_MARKER)) {
-      errors.push(
-        `в артефакте нет маркера заглушки «${STUB_MARKER}» — подмена облачных модулей не подтверждается`
-      );
-    }
-    if (graph) {
-      for (const module of [CLOUD_MODULES.stubClient, CLOUD_MODULES.stubSync]) {
-        if (!graph.has(module)) errors.push(`в графе модулей нет заглушки ${module}`);
-      }
-      for (const module of [CLOUD_MODULES.realClient, CLOUD_MODULES.realSync]) {
-        if (graph.has(module)) errors.push(`в графе модулей присутствует реальный модуль ${module}`);
-      }
-      notes.push(`граф модулей: ${graph.size} записей, заглушки подтверждены`);
-    } else {
-      notes.push('граф модулей не передан: подмена подтверждается только маркером заглушки');
-    }
-    notes.push(`credentials: ${secretOccurrences.length} вхождений, SDK: ${sdkChunks.length} чанков`);
+    notes.push(graph ? `граф модулей: ${graph.size} записей` : 'граф модулей не передан');
   } else if (mode === 'production') {
-    if (!secretOccurrences.some((entry) => entry.includes(secrets.url.slice(0, 20)))) {
-      errors.push('в production-сборке не найдены credentials Supabase — конфигурация потеряна');
-    }
-    if (sdkChunks.length === 0 && vendorChunks.length === 0) {
-      errors.push('в production-сборке нет Supabase SDK — конфигурация потеряна');
-    }
     if (/Content-Security-Policy/.test(indexHtml)) {
       errors.push('в production-сборке появилась CSP тестового режима');
     }
@@ -328,24 +257,10 @@ export function checkArtifact({ mode, dir, moduleGraph, secrets = extractCloudSe
     if (!/CACHE_PREFIX = "ironlog-"/.test(sw)) {
       errors.push('в sw.js нет production-префикса кэша ironlog-');
     }
-    if (allText.includes(STUB_MARKER)) {
-      errors.push('в production-сборке найден маркер тестовой заглушки');
-    }
     if (files.includes('.nojekyll')) {
       errors.push('в production-сборке появился .nojekyll тестового режима');
     }
-    if (graph) {
-      for (const module of [CLOUD_MODULES.realClient, CLOUD_MODULES.realSync]) {
-        if (!graph.has(module)) errors.push(`в графе модулей нет реального модуля ${module}`);
-      }
-      for (const module of [CLOUD_MODULES.stubClient, CLOUD_MODULES.stubSync]) {
-        if (graph.has(module)) errors.push(`в графе модулей присутствует заглушка ${module}`);
-      }
-      notes.push(`граф модулей: ${graph.size} записей, реальные модули подтверждены`);
-    } else {
-      notes.push('граф модулей не передан');
-    }
-    notes.push(`credentials: ${secretOccurrences.length} вхождений, SDK: ${sdkChunks.length} чанков`);
+    notes.push(graph ? `граф модулей: ${graph.size} записей` : 'граф модулей не передан');
   } else {
     errors.push(`неизвестный режим проверки: ${mode}`);
   }
@@ -476,7 +391,6 @@ export function checkEntryClosure({
   dir,
   moduleGraph,
   entryImports,
-  secrets = extractCloudSecrets(),
 }) {
   const errors = [];
   const notes = [];
@@ -583,16 +497,10 @@ export function checkEntryClosure({
 
   // Vendors are never allowed by name: their actual text is inspected.
   const forbidden = new Set(ENTRY_FORBIDDEN_MARKERS);
-  const credentialValues = [secrets.url, secrets.projectRef, secrets.keyPrefix];
   for (const chunk of closure) {
     const text = textOf.get(chunk) ?? '';
     for (const marker of forbidden) {
       if (text.includes(marker)) errors.push(`чанк замыкания ${chunk} содержит «${marker}»`);
-    }
-    for (const credential of credentialValues) {
-      if (credential && text.includes(credential)) {
-        errors.push(`чанк замыкания ${chunk} содержит production credential`);
-      }
     }
   }
 
@@ -636,7 +544,6 @@ export function selfTestEntryClosure({
   dir,
   moduleGraph,
   entryImports,
-  secrets = extractCloudSecrets(),
 }) {
   const cases = [];
   const run = (name, mutate) => {
@@ -662,7 +569,6 @@ export function selfTestEntryClosure({
         dir: temporary,
         moduleGraph: graphPath,
         entryImports,
-        secrets,
       });
       const expected = name === 'неповреждённый артефакт';
       const passed = expected ? result.ok : !result.ok;
@@ -777,39 +683,27 @@ export function selfTestEntryClosure({
  * Proves the mode check is not vacuous: a copy of the artifact is mutated so that
  * it must be rejected. Returns { ok, detail }.
  */
-export function selfTest({ mode, dir, moduleGraph, secrets = extractCloudSecrets() }) {
+export function selfTest({ mode, dir, moduleGraph }) {
   const temporary = mkdtempSync(join(tmpdir(), `ironlog-self-test-${mode}-`));
   try {
     copyDir(dir, temporary);
-    const files = listFiles(temporary);
-    const jsFiles = files.filter((file) => file.endsWith('.js'));
-    if (jsFiles.length === 0) return { ok: false, detail: 'в артефакте нет JS-файлов' };
+    const indexPath = resolve(temporary, 'index.html');
+    if (!existsSync(indexPath)) {
+      return { ok: false, detail: 'в артефакте нет index.html' };
+    }
+    const html = readFileSync(indexPath, 'utf-8');
 
     if (mode === 'test') {
-      const target = jsFiles[0];
-      const content = readFileSync(resolve(temporary, target), 'utf-8');
-      writeFileSync(
-        resolve(temporary, target),
-        `${content}\n/* self-test injection */ const leaked = '${secrets.url}';\n`
-      );
+      // The test shell must carry the restrictive CSP; removing it has to fail.
+      const stripped = html.replace(/<meta http-equiv="Content-Security-Policy"[^>]*>\s*/, '');
+      if (stripped === html) return { ok: false, detail: 'в артефакте не было меты CSP' };
+      writeFileSync(indexPath, stripped);
     } else {
-      let replacements = 0;
-      for (const file of [...jsFiles, ...files.filter((f) => f.endsWith('.html'))]) {
-        const content = readFileSync(resolve(temporary, file), 'utf-8');
-        let stripped = content;
-        for (const secret of [secrets.url, secrets.projectRef, secrets.keyPrefix]) {
-          const parts = stripped.split(secret);
-          replacements += parts.length - 1;
-          stripped = parts.join('');
-        }
-        if (stripped !== content) writeFileSync(resolve(temporary, file), stripped);
-      }
-      if (replacements === 0) {
-        return { ok: false, detail: 'нечего удалять: в артефакте не было credentials' };
-      }
+      // A production shell must not carry the test CSP.
+      writeFileSync(indexPath, html.replace('<head>', `<head>${TEST_CSP_META}`));
     }
 
-    const result = checkArtifact({ mode, dir: temporary, moduleGraph, secrets });
+    const result = checkArtifact({ mode, dir: temporary, moduleGraph });
     if (result.ok) {
       return { ok: false, detail: 'повреждённый артефакт был принят проверкой' };
     }
@@ -850,20 +744,10 @@ export function runCli(argv) {
     return 2;
   }
 
-  let secrets;
-  try {
-    secrets = extractCloudSecrets();
-  } catch (error) {
-    write('## Проверка артефакта');
-    write('');
-    write(`**Проверка не пройдена (fail-closed).** ${error.message}`);
-    return 1;
-  }
-
   const dir = resolve(args.dir);
   const moduleGraph = args.moduleGraph ? resolve(args.moduleGraph) : '';
 
-  const result = checkArtifact({ mode: args.mode, dir, moduleGraph, secrets });
+  const result = checkArtifact({ mode: args.mode, dir, moduleGraph });
 
   write(`## Проверка артефакта — режим ${args.mode}`);
   write('');
@@ -885,7 +769,7 @@ export function runCli(argv) {
   }
   const closure = importProblem
     ? { ok: false, errors: [importProblem], notes: [] }
-    : checkEntryClosure({ dir, moduleGraph, entryImports, secrets });
+    : checkEntryClosure({ dir, moduleGraph, entryImports });
 
   write('');
   write('## Изоляция entry — статическое замыкание');
@@ -906,12 +790,12 @@ export function runCli(argv) {
   if (!result.ok || !closure.ok) return 1;
 
   if (args.selfTest) {
-    const self = selfTest({ mode: args.mode, dir, moduleGraph, secrets });
+    const self = selfTest({ mode: args.mode, dir, moduleGraph });
     write('');
     write(self.ok ? `Самопроверка режима: ${self.detail}` : `**Самопроверка режима не пройдена.** ${self.detail}`);
     if (!self.ok) return 1;
 
-    const closureSelf = selfTestEntryClosure({ dir, moduleGraph, entryImports, secrets });
+    const closureSelf = selfTestEntryClosure({ dir, moduleGraph, entryImports });
     write('');
     write(
       closureSelf.ok

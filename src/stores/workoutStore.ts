@@ -32,7 +32,6 @@ import {
   distributeReps,
   type PlannedSet,
 } from '../utils';
-import { pushToCloud } from '../lib/sync';
 
 
 // ---- Types ----
@@ -448,10 +447,6 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
       const finishedSession = await workoutRepo.getWorkoutSessionById(session.id);
       await workoutStateRepo.clearWorkoutState();
 
-      // Sync to cloud (fire and forget — don't block UI)
-      pushToCloud().catch((err) =>
-        console.error('Cloud sync after workout failed:', err)
-      );
 
       set({
         session: finishedSession,

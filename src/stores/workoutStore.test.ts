@@ -29,10 +29,6 @@ vi.mock('../db', () => ({
   generateId: vi.fn(() => 'generated-id'),
 }));
 
-vi.mock('../lib/sync', () => ({
-  pushToCloud: vi.fn(),
-}));
-
 import { useWorkoutStore } from './workoutStore';
 
 describe('rest timer clock', () => {

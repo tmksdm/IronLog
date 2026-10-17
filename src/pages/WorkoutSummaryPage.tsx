@@ -35,7 +35,6 @@ import {
 import { getDayTypeColor, getDayTypeTextClass, DAY_TYPE_NAMES_RU } from '../theme';
 import { LoadingScreen } from '../components/ui';
 import { BodyWeightCard, BodyWeightEditModal } from '../components/workout';
-import { pushToCloud } from '../lib/sync';
 
 // --- Weight change detection ---
 
@@ -127,9 +126,6 @@ export function WorkoutSummaryPage() {
     if (!session) return;
     await workoutRepo.updateWorkoutSessionBodyWeight(session.id, weightBefore, weightAfter);
     setSession({ ...session, weightBefore, weightAfter });
-    pushToCloud().catch((err) =>
-      console.error('Cloud sync after body-weight update failed:', err)
-    );
   }
 
   // --- Computed values ---

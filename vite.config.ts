@@ -155,22 +155,12 @@ self.addEventListener('fetch', (event) => {
 // ==========================================
 // Test build (mode: testdeploy)
 //
-// The test build must not be able to reach the production Supabase project:
-//  - cloud modules are replaced by stubs at resolve time;
-//  - the build fails if any production credential reaches the artifact;
+// The test build exists for the separate test origin, not for the cloud (the
+// app has no cloud any more):
 //  - the shell carries a CSP that restricts network access to its own origin;
-//  - the installed PWA identifies itself as "IronLog Test".
+//  - the installed PWA identifies itself as "IronLog Test" and uses its own
+//    service-worker cache prefix, so it can never take over the production one.
 // ==========================================
-
-/** Production modules replaced by stubs in the test build. */
-const TEST_BUILD_MODULE_STUBS: ReadonlyArray<readonly [string, string]> = [
-  ['src/lib/supabase.ts', 'src/lib/supabase.disabled.ts'],
-  ['src/lib/sync.ts', 'src/lib/sync.disabled.ts'],
-  [
-    'src/components/settings/SyncDiagnostics.tsx',
-    'src/components/settings/SyncDiagnostics.disabled.tsx',
-  ],
-];
 
 /**
  * `connect-src 'self'` is the point of this policy: no egress to any other
@@ -192,53 +182,7 @@ const TEST_BUILD_CSP = [
   "form-action 'self'",
 ].join('; ');
 
-/**
- * Reads the production credentials from the source module, so the artifact
- * check can never drift from the real values. Throws when the values cannot be
- * extracted: a silently empty check would be worse than a failed build.
- */
-function readCloudSecrets(): string[] {
-  const source = readFileSync(resolve(__dirname, 'src/lib/supabase.ts'), 'utf-8');
-  const url = source.match(/https:\/\/[a-z0-9-]+\.supabase\.co/)?.[0];
-  const key = source.match(/eyJ[A-Za-z0-9_-]{20,}/)?.[0];
-  const projectRef = url?.replace('https://', '').split('.')[0];
-  const secrets = [url, projectRef, key?.slice(0, 40)].filter(
-    (value): value is string => typeof value === 'string' && value.length > 0
-  );
-  if (secrets.length < 3) {
-    throw new Error(
-      'Не удалось извлечь URL, project ref и ключ Supabase из src/lib/supabase.ts — ' +
-        'проверка артефакта тестовой сборки не может быть выполнена'
-    );
-  }
-  return secrets;
-}
-
-/** Replaces cloud modules with stubs; active only in the test build. */
-function cloudIsolationPlugin(enabled: boolean) {
-  return {
-    name: 'ironlog-cloud-isolation',
-    enforce: 'pre' as const,
-    apply: 'build' as const,
-    async resolveId(source: string, importer: string | undefined, resolveOptions: object) {
-      if (!enabled) return null;
-      const resolved = await this.resolve(source, importer, {
-        ...resolveOptions,
-        skipSelf: true,
-      });
-      if (!resolved) return null;
-      const id = resolved.id.replaceAll('\\', '/');
-      for (const [original, stub] of TEST_BUILD_MODULE_STUBS) {
-        if (id.endsWith(`/${original}`)) {
-          return resolve(__dirname, stub);
-        }
-      }
-      return null;
-    },
-  };
-}
-
-/** Test identity, CSP and the fail-closed artifact check. */
+/** Test identity and CSP. */
 function testBuildPlugin(enabled: boolean) {
   return {
     name: 'ironlog-test-build',
@@ -272,32 +216,15 @@ function testBuildPlugin(enabled: boolean) {
       // switched to a branch.
       writeFileSync(resolve(outDir, '.nojekyll'), '');
 
-      const secrets = readCloudSecrets();
-      const leaked: string[] = [];
-      for (const file of listBuildFiles(outDir)) {
-        const content = readFileSync(resolve(outDir, file));
-        for (const secret of secrets) {
-          if (content.includes(Buffer.from(secret))) {
-            leaked.push(`${file} → ${secret.slice(0, 24)}…`);
-          }
-        }
-      }
-      if (leaked.length > 0) {
-        throw new Error(
-          'Тестовая сборка содержит данные production Supabase, публикация запрещена:\n' +
-            leaked.join('\n')
-        );
-      }
-      console.log('✅ test build: production Supabase не найден в артефакте');
+      console.log('✅ test build: identity, CSP and cache prefix applied');
     },
   };
 }
 
 /**
  * Writes a `sourceModule → chunk` map. Enabled only through the
- * IRONLOG_MODULE_GRAPH environment variable and used by CI to prove that the
- * cloud modules were substituted — and not merely tree-shaken away. It never
- * changes the emitted bundle.
+ * IRONLOG_MODULE_GRAPH environment variable and used by CI to prove the
+ * static entry closure of the emitted bundle. It never changes the bundle.
  */
 function moduleGraphReporterPlugin(outputPath: string) {
   return {
@@ -337,7 +264,6 @@ export default defineConfig(({ mode }) => {
   return {
     base,
     plugins: [
-      cloudIsolationPlugin(isTestBuild),
       react(),
       tailwindcss(),
       versionJsonPlugin(),
@@ -379,7 +305,6 @@ export default defineConfig(({ mode }) => {
             const groups: Record<string, string[]> = {
               'react-vendor': ['react', 'react-dom', 'react-router-dom'],
               'sqlite-vendor': ['@capacitor-community/sqlite', 'jeep-sqlite', 'sql.js'],
-              ...(isTestBuild ? {} : { 'supabase-vendor': ['@supabase/supabase-js'] }),
             };
             for (const [chunk, packages] of Object.entries(groups)) {
               if (packages.some((name) => normalized.includes(`/node_modules/${name}/`))) {

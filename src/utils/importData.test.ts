@@ -8,7 +8,6 @@
 // All fixtures here are synthetic. No real user backup is stored in the
 // repository.
 
-import { fileURLToPath } from 'node:url';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import initSqlJs, { type Database } from 'sql.js';
 
@@ -193,8 +192,7 @@ beforeEach(async () => {
   };
 
   const SQL = await initSqlJs({
-    locateFile: () =>
-      fileURLToPath(new URL('../../node_modules/sql.js/dist/sql-wasm.wasm', import.meta.url)),
+    locateFile: () => 'node_modules/sql.js/dist/sql-wasm.wasm',
   });
   const db = new SQL.Database();
   db.exec(CREATE_TABLES_SQL);
@@ -309,7 +307,7 @@ describe('parseBackupJSON', () => {
   });
 
   it('still accepts a v1 file without the program state', () => {
-    const legacy = syntheticBackup() as Record<string, unknown>;
+    const legacy = syntheticBackup() as unknown as Record<string, unknown>;
     legacy.version = 1;
     delete legacy.pullupProgram;
     delete legacy.runningProgram;

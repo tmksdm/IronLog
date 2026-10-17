@@ -35,7 +35,6 @@ import { LoadingScreen } from '../components/ui';
 import { BodyWeightCard, BodyWeightEditModal, ConfirmModal } from '../components/workout';
 import { useAppStore } from '../stores/appStore';
 import { rollbackProgressionForSession } from '../utils/rollbackProgression';
-import { pushToCloud } from '../lib/sync';
 
 
 
@@ -108,9 +107,6 @@ export function WorkoutDetailPage() {
     if (!session) return;
     await workoutRepo.updateWorkoutSessionBodyWeight(session.id, weightBefore, weightAfter);
     setSession({ ...session, weightBefore, weightAfter });
-    pushToCloud().catch((err) =>
-      console.error('Cloud sync after body-weight update failed:', err)
-    );
   }
 
   // --- Computed values ---

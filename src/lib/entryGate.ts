@@ -5,7 +5,7 @@
  *
  * `HostGuard` checks the same decision again at render time and stays as the
  * second line of defence. This gate is what keeps the application, the local
- * database, the cloud modules and the service-worker registration from being
+ * database and the service-worker registration from being
  * loaded at all on a hostname that does not belong to the build — see
  * src/main.tsx, which reaches App only through `resolveEntry`.
  *

@@ -23,12 +23,6 @@ import {
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 
-const SECRETS = {
-  url: 'https://testprojectref123.supabase.co',
-  projectRef: 'testprojectref123',
-  keyPrefix: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9',
-};
-
 const CSP = `<meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src 'self'" />`;
 
 const created = [];
@@ -70,11 +64,7 @@ function workerSource({ prefix, base, urls, version = '0.0.0' }) {
 }
 
 const TEST_WORKER_FILES = ['.nojekyll', 'assets/index-abc.js', 'index.html', 'manifest.json'];
-const PRODUCTION_WORKER_FILES = [
-  'assets/supabase-vendor-xyz.js',
-  'index.html',
-  'manifest.json',
-];
+const PRODUCTION_WORKER_FILES = ['assets/app-xyz.js', 'index.html', 'manifest.json'];
 
 function testArtifact(overrides = {}) {
   const dir = makeDir();
@@ -97,7 +87,7 @@ function testArtifact(overrides = {}) {
       workerSource({ prefix: 'ironlog-test-', base: './', urls: TEST_WORKER_FILES })
   );
   if (overrides.nojekyll !== false) write(dir, '.nojekyll', '');
-  write(dir, 'assets/index-abc.js', overrides.bundle ?? "const marker = 'ironlog-cloud-stub';");
+  write(dir, 'assets/index-abc.js', overrides.bundle ?? "const marker = 'ironlog-entry';");
   return dir;
 }
 
@@ -115,54 +105,17 @@ function productionArtifact(overrides = {}) {
     overrides.sw ??
       workerSource({ prefix: 'ironlog-', base: '/IronLog/', urls: PRODUCTION_WORKER_FILES })
   );
-  write(
-    dir,
-    'assets/supabase-vendor-xyz.js',
-    overrides.bundle ?? `const url='${SECRETS.url}'; class GoTrueClient {}`
-  );
+  write(dir, 'assets/app-xyz.js', overrides.bundle ?? 'const app = 1;');
   return dir;
 }
 
-const check = (mode, dir, moduleGraph = '') =>
-  checkArtifact({ mode, dir, moduleGraph, secrets: SECRETS });
+const check = (mode, dir, moduleGraph = '') => checkArtifact({ mode, dir, moduleGraph });
 
 describe('test artifact', () => {
   it('accepts a correct artifact', () => {
     const result = check('test', testArtifact());
     expect(result.errors).toEqual([]);
     expect(result.ok).toBe(true);
-  });
-
-  it('rejects a leaked production URL', () => {
-    const dir = testArtifact({ bundle: `const marker='ironlog-cloud-stub';\nconst u='${SECRETS.url}';` });
-    const result = check('test', dir);
-    expect(result.ok).toBe(false);
-    expect(result.errors.join(' ')).toContain('credentials production Supabase');
-  });
-
-  it('rejects a leaked project ref', () => {
-    const result = check('test', testArtifact({ bundle: `x='${SECRETS.projectRef}';` }));
-    expect(result.ok).toBe(false);
-  });
-
-  it('rejects a leaked key', () => {
-    const result = check('test', testArtifact({ bundle: `x='${SECRETS.keyPrefix}'+'.rest';` }));
-    expect(result.ok).toBe(false);
-  });
-
-  it('rejects a bundled Supabase SDK', () => {
-    const result = check(
-      'test',
-      testArtifact({ bundle: "const marker='ironlog-cloud-stub'; class GoTrueClient {}" })
-    );
-    expect(result.ok).toBe(false);
-    expect(result.errors.join(' ')).toContain('SDK');
-  });
-
-  it('rejects a supabase-vendor chunk', () => {
-    const dir = testArtifact();
-    write(dir, 'assets/supabase-vendor-abc.js', 'export {};');
-    expect(check('test', dir).ok).toBe(false);
   });
 
   it('rejects a missing CSP or a CSP without connect-src self', () => {
@@ -194,25 +147,6 @@ describe('test artifact', () => {
     expect(check('test', testArtifact({ nojekyll: false })).ok).toBe(false);
   });
 
-  it('rejects an artifact without the stub marker', () => {
-    const result = check('test', testArtifact({ bundle: 'const nothing = 1;' }));
-    expect(result.ok).toBe(false);
-    expect(result.errors.join(' ')).toContain('маркер');
-  });
-
-  it('requires the stubs in the module graph and rejects the real modules', () => {
-    const good = writeGraph([
-      'lib/supabase.disabled.ts\tassets/index-abc.js',
-      'lib/sync.disabled.ts\tassets/index-abc.js',
-    ]);
-    expect(check('test', testArtifact(), good).ok).toBe(true);
-
-    const real = writeGraph(['lib/supabase.ts\tassets/index-abc.js']);
-    const result = check('test', testArtifact(), real);
-    expect(result.ok).toBe(false);
-    expect(result.errors.join(' ')).toContain('заглушки');
-  });
-
   it('rejects a missing directory', () => {
     expect(check('test', resolve(tmpdir(), 'ironlog-does-not-exist-42')).ok).toBe(false);
   });
@@ -225,15 +159,11 @@ describe('production artifact', () => {
     expect(result.ok).toBe(true);
   });
 
-  it('rejects a production artifact without credentials or SDK', () => {
-    expect(check('production', productionArtifact({ bundle: 'const x = 1;' })).ok).toBe(false);
-  });
-
   it('rejects a test CSP in production', () => {
     expect(check('production', productionArtifact({ html: `<html><head>${CSP}</head></html>` })).ok).toBe(false);
   });
 
-  it('rejects a test manifest, a test cache prefix, .nojekyll and stub markers', () => {
+  it('rejects a test manifest, a test cache prefix and .nojekyll', () => {
     expect(
       check('production', productionArtifact({ manifest: JSON.stringify({ name: 'IronLog Test', start_url: './' }) })).ok
     ).toBe(false);
@@ -252,19 +182,7 @@ describe('production artifact', () => {
     const withNojekyll = productionArtifact();
     write(withNojekyll, '.nojekyll', '');
     expect(check('production', withNojekyll).ok).toBe(false);
-    expect(
-      check('production', productionArtifact({ bundle: `const u='${SECRETS.url}'; const m='ironlog-cloud-stub';` })).ok
-    ).toBe(false);
   });
-
-  it('requires the real modules in the module graph and rejects stubs', () => {
-    const good = writeGraph(['lib/supabase.ts\tassets/index-abc.js', 'lib/sync.ts\tassets/index-abc.js']);
-    expect(check('production', productionArtifact(), good).ok).toBe(true);
-
-    const stubbed = writeGraph(['lib/supabase.disabled.ts\tassets/index-abc.js']);
-    expect(check('production', productionArtifact(), stubbed).ok).toBe(false);
-  });
-});
 
 describe('service worker rules', () => {
   it('rejects a worker that could reach another origin', () => {
@@ -405,7 +323,7 @@ function closureGraph(extraRows = []) {
 }
 
 const checkClosure = (dir, moduleGraph, entryImports = ENTRY_IMPORTS) =>
-  checkEntryClosure({ dir, moduleGraph, entryImports, secrets: SECRETS });
+  checkEntryClosure({ dir, moduleGraph, entryImports });
 
 describe('entry closure', () => {
   it('accepts an artifact whose entry reaches only the gate', () => {
@@ -430,13 +348,6 @@ describe('entry closure', () => {
     expect(result.errors.join(' ')).toContain('SQLiteConnection');
   });
 
-  it('rejects a credential inside the closure', () => {
-    const dir = closureArtifact({
-      entry: `import "./vite-helper.js";\nexport const leaked = '${SECRETS.url}';\n`,
-    });
-    const result = checkClosure(dir, closureGraph());
-    expect(result.ok).toBe(false);
-    expect(result.errors.join(' ')).toContain('production credential');
   });
 
   it('rejects modulepreload of the application chunk', () => {
@@ -476,7 +387,7 @@ describe('entry closure', () => {
 
   it('rejects entry imports that changed in the source', () => {
     const extra = {
-      staticImports: [...ENTRY_SOURCE_IMPORTS, './lib/supabase'],
+      staticImports: [...ENTRY_SOURCE_IMPORTS, './lib/extra'],
       dynamicImports: [...ENTRY_DYNAMIC_IMPORTS],
     };
     expect(checkClosure(closureArtifact(), closureGraph(), extra).errors.join(' ')).toContain(
@@ -500,12 +411,41 @@ describe('entry closure', () => {
 });
 
 describe('entry closure self test', () => {
+  const entryModules = [
+    'main.tsx',
+    'lib/buildTarget.ts',
+    'lib/entryGate.ts',
+    'components/ui/HostGuard.tsx',
+    'components/ui/AppErrorBoundary.tsx',
+    'components/ui/EntryLoadErrorScreen.tsx',
+    'index.css',
+  ];
+  const entryImports = {
+    staticImports: [...ENTRY_SOURCE_IMPORTS],
+    dynamicImports: [...ENTRY_DYNAMIC_IMPORTS],
+  };
+  const NL = String.fromCharCode(10);
+  const TAB = String.fromCharCode(9);
+  const makeArtifact = (overrides = {}) => {
+    const dir = makeDir();
+    write(dir, 'index.html', overrides.html ?? '<html><head><script type="module" src="./assets/index-entry.js"></script></head><body></body></html>');
+    write(dir, 'assets/index-entry.js', overrides.entry ?? ['import "./vite-helper.js";', 'import "./react-vendor.js";', 'void import("./App.js");', ''].join(NL));
+    write(dir, 'assets/vite-helper.js', 'export const helper = 1;' + NL);
+    write(dir, 'assets/react-vendor.js', 'export const react = 1;' + NL);
+    write(dir, 'assets/App.js', overrides.app ?? ['import "./sqlite-vendor.js";', 'export default 1;', ''].join(NL));
+    write(dir, 'assets/sqlite-vendor.js', overrides.vendor ?? ['class SQLiteConnection {}', 'export {};', ''].join(NL));
+    return dir;
+  };
+  const makeGraph = () =>
+    writeGraph([
+      ...entryModules.map((module) => module + TAB + 'assets/index-entry.js'),
+      'App.tsx' + TAB + 'assets/App.js',
+    ]);
   it('rejects every prepared damage and accepts the untouched artifact', () => {
     const result = selfTestEntryClosure({
-      dir: closureArtifact(),
-      moduleGraph: closureGraph(),
-      entryImports: ENTRY_IMPORTS,
-      secrets: SECRETS,
+      dir: makeArtifact(),
+      moduleGraph: makeGraph(),
+      entryImports,
     });
     expect(result.cases.map((item) => item.name)).toEqual([
       'неповреждённый артефакт',
@@ -521,26 +461,24 @@ describe('entry closure self test', () => {
 
   it('fails closed when the artifact has no entry script', () => {
     const result = selfTestEntryClosure({
-      dir: closureArtifact({ html: '<html><head></head></html>' }),
-      moduleGraph: closureGraph(),
-      entryImports: ENTRY_IMPORTS,
-      secrets: SECRETS,
+      dir: makeArtifact({ html: '<html><head></head></html>' }),
+      moduleGraph: makeGraph(),
+      entryImports,
     });
     expect(result.ok).toBe(false);
     expect(result.detail).toContain('entry-чанк не найден');
   });
 
   it('does not modify the original artifact', () => {
-    const dir = closureArtifact();
+    const dir = makeArtifact();
     const entry = readFileSync(resolve(dir, 'assets/index-entry.js'), 'utf-8');
     selfTestEntryClosure({
       dir,
-      moduleGraph: closureGraph(),
-      entryImports: ENTRY_IMPORTS,
-      secrets: SECRETS,
+      moduleGraph: makeGraph(),
+      entryImports,
     });
     expect(readFileSync(resolve(dir, 'assets/index-entry.js'), 'utf-8')).toBe(entry);
-    expect(checkClosure(dir, closureGraph()).ok).toBe(true);
+    expect(checkEntryClosure({ dir, moduleGraph: makeGraph(), entryImports }).ok).toBe(true);
   });
 });
 
@@ -570,22 +508,22 @@ describe('reading the entry source', () => {
 });
 
 describe('mode self test', () => {
-  it('proves the test-mode check rejects an injected credential', () => {
-    const result = selfTest({ mode: 'test', dir: testArtifact(), secrets: SECRETS });
+  it('proves the test-mode check rejects a shell without the CSP', () => {
+    const result = selfTest({ mode: 'test', dir: testArtifact() });
     expect(result.detail).toBeTruthy();
     expect(result.ok).toBe(true);
   });
 
   it('proves the production-mode check rejects a stripped artifact', () => {
-    const result = selfTest({ mode: 'production', dir: productionArtifact(), secrets: SECRETS });
+    const result = selfTest({ mode: 'production', dir: productionArtifact() });
     expect(result.ok).toBe(true);
   });
 
   it('does not modify the original artifact', () => {
     const dir = testArtifact();
-    const before = checkArtifact({ mode: 'test', dir, secrets: SECRETS });
-    selfTest({ mode: 'test', dir, secrets: SECRETS });
-    const after = checkArtifact({ mode: 'test', dir, secrets: SECRETS });
+    const before = checkArtifact({ mode: 'test', dir });
+    selfTest({ mode: 'test', dir });
+    const after = checkArtifact({ mode: 'test', dir });
     expect(after.ok).toBe(before.ok);
     expect(after.ok).toBe(true);
   });

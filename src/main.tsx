@@ -5,7 +5,7 @@
  *
  * The host check runs here, before the application is imported: on a hostname
  * that does not belong to this build only the blocking screen is loaded, so the
- * application code, the local database, the cloud modules and the service-worker
+ * application code, the local database and the service-worker
  * registration are never evaluated there. `HostGuard` checks the same decision
  * again at render time as the second line of defence.
  *

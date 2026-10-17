@@ -14,7 +14,6 @@ import { RunningCore } from '../components/finish';
 import { Button } from '../components/ui';
 import { workoutRepo } from '../db';
 import { applyRunResult } from '../utils/runningProgram';
-import { pushToCloud } from '../lib/sync';
 import { formatTimeMMSS } from '../utils/format';
 import { ChevronLeft, Check } from 'lucide-react';
 
@@ -44,10 +43,6 @@ export function RunningPage() {
         applyRunResult(succeeded);
       }
 
-      // Background cloud backup (silent, may need VPN — fine if it fails).
-      pushToCloud().catch((err) =>
-        console.error('Cloud push after standalone run failed:', err)
-      );
 
       setSaved({ seconds: totalSeconds, succeeded });
     } catch (err) {
