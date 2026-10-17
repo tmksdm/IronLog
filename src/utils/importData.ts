@@ -10,7 +10,16 @@
 
 import { getDb, saveToStore } from '../db/database';
 import type { BackupData } from '../types';
-import { pushToCloud } from '../lib/sync';
+import {
+  saveRunningProgram,
+  type RunningProgramState,
+  type RunningProgramStateSnapshot,
+} from './runningProgram';
+import {
+  savePullupProgram,
+  type PullupDayNumber,
+  type PullupProgramState,
+} from './pullupProgram';
 
 
 // ==========================================
@@ -138,17 +147,24 @@ export function parseBackupJSON(jsonString: string): ImportPreview {
 export async function restoreFromBackup(data: BackupData): Promise<void> {
   const db = await getDb();
 
-  // Disable foreign keys for bulk operations
-  await db.execute('PRAGMA foreign_keys = OFF;');
+  // Foreign keys are switched off OUTSIDE the transaction: the SQLite engine
+  // used on the web ignores a pragma change made inside an open transaction,
+  // and older backups may contain rows whose parent session is missing.
+  await db.execute('PRAGMA foreign_keys = OFF;', false);
 
   try {
+    // Everything below runs in a single transaction: either the whole backup
+    // lands or the database is left exactly as it was. Statements therefore
+    // bypass the per-statement transaction wrapper (transaction = false).
+    await db.beginTransaction();
+
     // 1. Clear all existing data (order matters for FK constraints)
-    await db.execute('DELETE FROM active_workout_state;');
-    await db.execute('DELETE FROM pullup_logs;');
-    await db.execute('DELETE FROM cardio_logs;');
-    await db.execute('DELETE FROM exercise_logs;');
-    await db.execute('DELETE FROM workout_sessions;');
-    await db.execute('DELETE FROM exercises;');
+    await db.execute('DELETE FROM active_workout_state;', false);
+    await db.execute('DELETE FROM pullup_logs;', false);
+    await db.execute('DELETE FROM cardio_logs;', false);
+    await db.execute('DELETE FROM exercise_logs;', false);
+    await db.execute('DELETE FROM workout_sessions;', false);
+    await db.execute('DELETE FROM exercises;', false);
 
     // 2. Insert exercises
     for (const e of data.exercises) {
@@ -181,7 +197,8 @@ export async function restoreFromBackup(data: BackupData): Promise<void> {
           e.timer_duration_seconds ?? null,
           e.timer_prep_seconds ?? null,
           e.is_active ?? 1,
-        ]
+        ],
+        false
       );
     }
 
@@ -203,7 +220,8 @@ export async function restoreFromBackup(data: BackupData): Promise<void> {
           s.time_end,
           s.total_kg,
           s.notes ?? null,
-        ]
+        ],
+        false
       );
     }
 
@@ -225,7 +243,8 @@ export async function restoreFromBackup(data: BackupData): Promise<void> {
           l.weight,
           l.is_skipped,
           l.completed_at ?? null,
-        ]
+        ],
+        false
       );
     }
 
@@ -257,7 +276,8 @@ export async function restoreFromBackup(data: BackupData): Promise<void> {
             c.duration_seconds ?? null,
             c.count ?? null,
             (c as any).succeeded ?? null,
-          ]
+          ],
+          false
         );
       }
     }
@@ -286,20 +306,75 @@ export async function restoreFromBackup(data: BackupData): Promise<void> {
             p.succeeded ?? 0,
             p.total_reps ?? 0,
             p.skipped ?? 0,
-          ]
+          ],
+          false
         );
       }
     }
 
+    await db.commitTransaction();
+  } catch (error) {
+    await db.rollbackTransaction();
+    throw new Error(
+      'Не удалось восстановить данные из файла: ' +
+        (error instanceof Error ? error.message : String(error))
+    );
   } finally {
-    await db.execute('PRAGMA foreign_keys = ON;');
-    await saveToStore();
+    await db.execute('PRAGMA foreign_keys = ON;', false);
   }
 
-  // Sync imported data to cloud (fire and forget)
-  pushToCloud().catch((err) =>
-    console.error('Cloud sync after import failed:', err)
-  );
+  // Persist the restored database to IndexedDB before touching program state.
+  await saveToStore();
+
+  // Progress that lives in localStorage is replaced only when the backup
+  // carries it, so v1 files and older v2 files leave the current plans alone.
+  const running = readRunningProgramState(data.runningProgram);
+  if (running) saveRunningProgram(running);
+
+  const pullup = readPullupProgramState(data.pullupProgram);
+  if (pullup) savePullupProgram(pullup);
+}
+
+/**
+ * Reads the running program state from a backup. Returns null when the field is
+ * missing or unusable, in which case the local progress is kept as it is.
+ */
+function readRunningProgramState(value: unknown): RunningProgramState | null {
+  if (!value || typeof value !== 'object') return null;
+  const raw = value as Partial<RunningProgramState>;
+  if (typeof raw.mainSpeed !== 'number' || !Number.isFinite(raw.mainSpeed)) {
+    return null;
+  }
+  return {
+    mainSpeed: raw.mainSpeed,
+    endSpeed: typeof raw.endSpeed === 'number' ? raw.endSpeed : null,
+    endSegments: typeof raw.endSegments === 'number' ? raw.endSegments : 0,
+    previous:
+      raw.previous && typeof raw.previous === 'object'
+        ? (raw.previous as RunningProgramStateSnapshot)
+        : null,
+  };
+}
+
+/** Reads the pull-up program state from a backup; null when it is unusable. */
+function readPullupProgramState(value: unknown): PullupProgramState | null {
+  if (!value || typeof value !== 'object') return null;
+  const raw = value as Partial<PullupProgramState>;
+  const day = raw.currentDay;
+  if (typeof day !== 'number' || day < 1 || day > 5) return null;
+
+  const rotation = raw.day5Rotation;
+  return {
+    currentDay: day as PullupDayNumber,
+    day5Rotation:
+      typeof rotation === 'number' && rotation >= 1 && rotation <= 4
+        ? (rotation as 1 | 2 | 3 | 4)
+        : 1,
+    day3TargetReps:
+      typeof raw.day3TargetReps === 'number' ? raw.day3TargetReps : 0,
+    day4TargetReps:
+      typeof raw.day4TargetReps === 'number' ? raw.day4TargetReps : 0,
+  };
 }
 
 // ==========================================

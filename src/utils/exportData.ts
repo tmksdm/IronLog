@@ -12,6 +12,8 @@ import { Filesystem, Directory, Encoding } from '@capacitor/filesystem';
 import { Share } from '@capacitor/share';
 import { getDb } from '../db/database';
 import type { BackupData } from '../types';
+import { loadRunningProgram } from './runningProgram';
+import { loadPullupProgram } from './pullupProgram';
 
 // ==========================================
 // JSON Export
@@ -19,6 +21,10 @@ import type { BackupData } from '../types';
 
 /**
  * Fetches all data from the database and returns a BackupData object.
+ *
+ * The running and pull-up programs live in localStorage rather than in the
+ * database, so they are collected here too: restoring the history without them
+ * would leave the user on a plan that does not match the restored workouts.
  */
 export async function buildBackupData(): Promise<BackupData> {
   const db = await getDb();
@@ -45,7 +51,15 @@ export async function buildBackupData(): Promise<BackupData> {
     exerciseLogs: logs.values ?? [],
     cardioLogs: cardio.values ?? [],
     pullupLogs: pullups.values ?? [],
+    runningProgram: toRecord(loadRunningProgram()),
+    pullupProgram: toRecord(loadPullupProgram()),
   };
+}
+
+/** localStorage program state as a plain JSON object (null when unset). */
+function toRecord(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== 'object') return null;
+  return value as Record<string, unknown>;
 }
 
 /**
