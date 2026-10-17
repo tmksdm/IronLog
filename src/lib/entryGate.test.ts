@@ -6,7 +6,7 @@
 
 import { describe, expect, it, vi } from 'vitest';
 
-import { PRODUCTION_HOSTNAME, TEST_HOSTNAME } from './buildTarget';
+import { PRODUCTION_HOSTNAME } from './buildTarget';
 import { resolveEntry } from './entryGate';
 
 const APP_MODULE = { default: 'ironlog-app' };
@@ -26,10 +26,11 @@ describe('resolveEntry — blocked hostnames', () => {
   });
 
   it('never loads the application for the test build while no test host is set', async () => {
-    // Fail-closed configuration: with TEST_HOSTNAME empty only local addresses run.
-    expect(TEST_HOSTNAME).toBe('');
+    // Fail-closed configuration: with an empty test hostname only local addresses run.
     const loader = load();
-    const result = await resolveEntry('ironlog-test.github.io', 'test', loader);
+    const result = await resolveEntry('ironlog-test.github.io', 'test', loader, {
+      testHostname: '',
+    });
 
     expect(loader).not.toHaveBeenCalled();
     expect(result.decision.allowed).toBe(false);

@@ -1,10 +1,10 @@
 name: CI
 
-# Runs on every push to develop and on every pull request.
+# Runs on every push to develop and test-deploy, and on every pull request.
 # Publish-only workflows (deploy.yml, build-apk.yml) stay manual and untouched.
 on:
   push:
-    branches: [develop]
+    branches: [develop, test-deploy]
   pull_request:
 
 # Minimal permissions: read the repository, nothing else.
