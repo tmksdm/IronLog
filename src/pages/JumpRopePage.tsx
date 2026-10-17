@@ -4,7 +4,6 @@ import { useNavigate } from 'react-router-dom';
 import { JumpRopeCore } from '../components/finish';
 import { Button } from '../components/ui';
 import { workoutRepo } from '../db';
-import { pushToCloud } from '../lib/sync';
 
 export function JumpRopePage() {
   const navigate = useNavigate();
@@ -24,9 +23,6 @@ export function JumpRopePage() {
         succeeded: null,
       });
 
-      pushToCloud().catch((error) =>
-        console.error('Cloud push after standalone jump rope failed:', error)
-      );
       setSavedCount(count);
     } catch (error) {
       console.error('Failed to save standalone jump rope:', error);

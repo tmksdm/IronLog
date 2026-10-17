@@ -1,0 +1,102 @@
+name: CI
+
+# Runs on every push to develop and test-deploy, and on every pull request.
+# Publish-only workflows (deploy.yml, build-apk.yml) stay manual and untouched.
+on:
+  push:
+    branches: [develop, test-deploy]
+  pull_request:
+
+# Minimal permissions: read the repository, nothing else.
+# No secrets, no Pages, no deployments, no id-token.
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    name: checks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Unit tests
+        run: npm test
+
+      # Each build is verified before the next one overwrites dist/.
+      # The module graph proves that the cloud modules were substituted rather
+      # than tree-shaken away (see vite.config.ts, IRONLOG_MODULE_GRAPH).
+      - name: Build (test) and write module graph
+        run: IRONLOG_MODULE_GRAPH=node_modules/module-graph-test.txt npm run build:test
+
+      - name: Verify test artifact and self-test the check
+        run: |
+          node scripts/ci/check-artifacts.mjs --mode test --dir dist \
+            --module-graph node_modules/module-graph-test.txt --self-test \
+            --summary "$GITHUB_STEP_SUMMARY"
+
+      - name: Build (web) and write module graph
+        run: IRONLOG_MODULE_GRAPH=node_modules/module-graph-web.txt npm run build
+
+      - name: Verify production web artifact
+        run: |
+          node scripts/ci/check-artifacts.mjs --mode production --dir dist \
+            --module-graph node_modules/module-graph-web.txt --self-test \
+            --summary "$GITHUB_STEP_SUMMARY"
+
+      - name: Build (GitHub Pages) and write module graph
+        run: IRONLOG_MODULE_GRAPH=node_modules/module-graph-ghpages.txt npm run build:ghpages
+
+      - name: Verify production GitHub Pages artifact
+        run: |
+          node scripts/ci/check-artifacts.mjs --mode production --dir dist \
+            --module-graph node_modules/module-graph-ghpages.txt \
+            --summary "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload build verification reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-verification
+          path: node_modules/module-graph-*.txt
+          if-no-files-found: warn
+          retention-days: 14
+
+      # Hard gate for the shipped surface: production dependencies only.
+      - name: npm audit — production dependencies (hard gate)
+        run: npm audit --omit=dev --audit-level=high
+
+      # Full audit. The step passes only while the report matches the explicit
+      # list of known advisories (scripts/ci/known-audit-advisories.json).
+      # A new advisory, a severity increase, or an unreadable report fails here,
+      # so a green step never hides an unexamined vulnerability. Known entries
+      # are reported in the job summary and are NOT treated as fixed.
+      - name: npm audit — full report vs known advisories
+        run: |
+          npm audit --json > audit-full.json 2>/dev/null || true
+          node scripts/ci/check-audit.mjs audit-full.json scripts/ci/known-audit-advisories.json "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload npm audit report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: npm-audit-full
+          path: audit-full.json
+          if-no-files-found: warn
+          retention-days: 14

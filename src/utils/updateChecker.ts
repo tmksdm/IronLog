@@ -27,6 +27,15 @@ function getBaseUrl(): string {
   return import.meta.env.BASE_URL || './';
 }
 
+/**
+ * Build id baked into this bundle by vite.config.ts. Empty in tests and in the
+ * dev server, where there is no deployed build to compare against.
+ */
+function localBuildId(): string {
+  const value = import.meta.env.VITE_BUILD_ID;
+  return typeof value === 'string' ? value : '';
+}
+
 export type UpdateStatus =
   | { available: false }
   | { available: true; remoteVersion: string; changes: string[] };
@@ -41,6 +50,8 @@ export async function checkForUpdate(): Promise<UpdateStatus> {
     const remoteVersion = data?.version;
     if (typeof remoteVersion !== 'string') return { available: false };
 
+    const remoteBuildId = typeof data?.buildId === 'string' ? data.buildId : '';
+
     const changes = Array.isArray(data?.changes)
       ? data.changes.filter(
           (change: unknown): change is string =>
@@ -51,6 +62,15 @@ export async function checkForUpdate(): Promise<UpdateStatus> {
     if (isNewer(remoteVersion, APP_VERSION)) {
       return { available: true, remoteVersion, changes };
     }
+
+    // The same release published again is still a new build: the browser only
+    // installs a worker whose bytes changed, and every build embeds its own id.
+    // Without this comparison a stand deploy would wait for the next version bump.
+    const installedBuildId = localBuildId();
+    if (installedBuildId && remoteBuildId && remoteBuildId !== installedBuildId) {
+      return { available: true, remoteVersion, changes };
+    }
+
     return { available: false };
   } catch {
     return { available: false };

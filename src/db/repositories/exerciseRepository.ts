@@ -4,7 +4,6 @@
 
 import { getDb, generateId, saveToStore } from '../database';
 import type { Exercise, DayTypeId } from '../../types';
-import { flushPendingCloudDeletions, pushToCloud, queueCloudDeletion } from '../../lib/sync';
 
 
 // Map a raw DB row to an Exercise object
@@ -122,10 +121,6 @@ export async function createExercise(
   );
 
   await saveToStore();
-  // Sync to cloud
-  pushToCloud().catch((err) =>
-    console.error('Cloud sync after exercise create failed:', err)
-  );
   return { id, ...data };
 }
 
@@ -177,10 +172,6 @@ export async function updateExercise(
   );
   await saveToStore();
 
-  // Sync to cloud
-  pushToCloud().catch((err) =>
-    console.error('Cloud sync after exercise update failed:', err)
-  );
 }
 
 /**
@@ -197,10 +188,6 @@ export async function updateSortOrders(
     ]);
   }
   await saveToStore();
-  // Sync to cloud
-  pushToCloud().catch((err) =>
-    console.error('Cloud sync after reorder failed:', err)
-  );
 }
 
 /**
@@ -224,14 +211,9 @@ export async function reactivateExercise(id: string): Promise<void> {
  */
 export async function deleteExercise(id: string): Promise<void> {
   const db = await getDb();
-  await queueCloudDeletion('exercise', id);
   // Delete any exercise logs referencing this exercise
   await db.run('DELETE FROM exercise_logs WHERE exercise_id = ?', [id]);
   // Delete the exercise itself
   await db.run('DELETE FROM exercises WHERE id = ?', [id]);
   await saveToStore();
-  // Sync deletion to cloud
-  flushPendingCloudDeletions().catch((err) =>
-    console.error('Cloud sync after exercise delete failed:', err)
-  );
 }

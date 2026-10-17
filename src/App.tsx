@@ -1,22 +1,19 @@
 // src/App.tsx
 
 /**
- * Root component with authentication gate, routing, bottom navigation,
- * app initialization, and update checking.
+ * Root component with routing, bottom navigation, app initialization, and
+ * update checking.
  *
- * Auth check reads the cached Supabase token from localStorage first
- * (instant, no network) so the app doesn't hang when the server is unreachable.
- * onAuthStateChange handles token refresh / expiry in the background.
+ * The application is local-only: there is no account, no session and no cloud
+ * sync, so the app goes straight into the workout data stored on the device.
  */
 
-import { lazy, Suspense, useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect } from 'react';
 import { HashRouter, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
-import { supabase } from './lib/supabase';
 import { useAppStore } from './stores/appStore';
 import { LoadingScreen, StartupErrorScreen } from './components/ui';
 import { BottomNav } from './components/layout';
 import { RestFinishedToastHost } from './components/workout/RestFinishedToast';
-import { LoginPage } from './pages/LoginPage';
 import { HomePage } from './pages/HomePage';
 import { startUpdateChecker } from './utils/updateChecker';
 
@@ -79,23 +76,6 @@ function useRedirectOnLaunch() {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 }
 
-/**
- * Check if a Supabase session token exists in localStorage.
- * Instant (no network). Supabase stores session under: sb-{projectRef}-auth-token
- */
-function hasLocalSupabaseSession(): boolean {
-  try {
-    const projectRef = 'khnepdfkjwpxwtbjvqiv';
-    const key = `sb-${projectRef}-auth-token`;
-    const stored = localStorage.getItem(key);
-    if (!stored) return false;
-    const parsed = JSON.parse(stored);
-    return !!(parsed?.access_token || parsed?.currentSession?.access_token);
-  } catch {
-    return false;
-  }
-}
-
 function AppContent() {
   const { initialize, isInitialized, isLoading, initializationError } = useAppStore();
   const location = useLocation();
@@ -141,86 +121,10 @@ function AppContent() {
 }
 
 function App() {
-  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-
   // Keep the PWA shell current without requiring a working screen to confirm it.
   useEffect(() => {
     return startUpdateChecker();
   }, []);
-
-  useEffect(() => {
-    // FAST PATH: check localStorage for cached token (instant, no network).
-    // If token exists, show the app immediately.
-    const hasCachedSession = hasLocalSupabaseSession();
-
-    if (hasCachedSession) {
-      setIsAuthenticated(true);
-      setIsCheckingAuth(false);
-    }
-
-    // SLOW PATH: verify session via network (handles token refresh).
-    // Runs in background. If token is actually expired, onAuthStateChange
-    // will fire and set isAuthenticated to false → shows login screen.
-    const checkSession = async () => {
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        setIsAuthenticated(!!session);
-      } catch (err) {
-        console.error('Failed to check auth session:', err);
-        if (!hasCachedSession) {
-          setIsAuthenticated(false);
-        }
-      } finally {
-        if (!hasCachedSession) {
-          setIsCheckingAuth(false);
-        }
-      }
-    };
-
-    checkSession();
-
-    // Listen for auth state changes.
-    // IMPORTANT: only log the user OUT on an explicit SIGNED_OUT event.
-    // When the WebView wakes from sleep, Supabase may briefly emit events
-    // with a null session while refreshing the token — those must NOT kick
-    // the user to the login screen mid-workout. As an extra guard, if a
-    // cached token still exists in localStorage, we keep the user logged in.
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
-        if (session) {
-          // Valid session present (login or successful token refresh).
-          setIsAuthenticated(true);
-          return;
-        }
-
-        if (event === 'SIGNED_OUT') {
-          // Real logout (user pressed "Logout" or token fully revoked).
-          setIsAuthenticated(false);
-          return;
-        }
-
-        // No session in this event, but it's NOT an explicit sign-out.
-        // If a token is still cached, ignore this transient state.
-        if (!hasLocalSupabaseSession()) {
-          setIsAuthenticated(false);
-        }
-        // Otherwise: do nothing — keep the user where they are.
-      }
-    );
-
-    return () => {
-      subscription.unsubscribe();
-    };
-  }, []);
-
-  if (isCheckingAuth) {
-    return <LoadingScreen />;
-  }
-
-  if (!isAuthenticated) {
-    return <LoginPage onLoginSuccess={() => setIsAuthenticated(true)} />;
-  }
 
   return (
     <HashRouter>

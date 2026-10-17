@@ -240,6 +240,14 @@ export interface BackupData {
   exerciseLogs: Array<Record<string, unknown>>;
   cardioLogs: Array<Record<string, unknown>>;
   pullupLogs?: Array<Record<string, unknown>>;
+  /**
+   * Program progress that lives outside the database (localStorage), so a
+   * restored backup continues the same plan. Absent in v1 backups and in v2
+   * files written before this field existed; when it is absent the local
+   * progress is left untouched instead of being reset.
+   */
+  runningProgram?: Record<string, unknown> | null;
+  pullupProgram?: Record<string, unknown> | null;
 }
 
 // --- Pull-up system types ---

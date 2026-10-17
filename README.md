@@ -1,73 +1,34 @@
-# React + TypeScript + Vite
+# IronLog
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Приложение для силовых тренировок с точным таймером отдыха: ход тренировки
+сохраняется, а время отдыха остаётся верным даже при выключенном экране и работе
+приложения в фоне.
 
-Currently, two official plugins are available:
+**Приложение полностью локальное.** Аккаунта, входа и облачной синхронизации нет:
+локальная база SQLite — единственный источник данных, приложение работает без сети
+вообще, а резервная копия делается экспортом и импортом файла JSON.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+- Рабочая PWA: https://tmksdm.github.io/IronLog/
+- Тестовый стенд: https://ironlog-test.github.io/ (отдельный origin, сборка из ветки `test-deploy`)
+- Платформы: PWA и Android через Capacitor (`npm run build:android`)
 
-## React Compiler
+## Разработка
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm install
+npm run dev            # локальный сервер разработки
+npm run lint           # ESLint
+npm test               # Vitest
+npm run build          # web-сборка
+npm run build:ghpages  # сборка для GitHub Pages (base /IronLog/)
+npm run build:test     # сборка для тестового стенда (CSP, адрес стенда)
+npm run build:android  # web-сборка и Capacitor sync
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+Ветки: работа идёт в `develop`, на стенд публикуется `test-deploy`, `main` —
+выпущенная версия. Публикация production выполняется только вручную
+(`workflow_dispatch` в `deploy.yml`), публикация стенда — только вручную и только
+после одобрения окружения `github-pages`.
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
+Правила работы — `AGENTS.md`, текущее состояние — `docs/HANDOFF.md`, принятые
+решения — `docs/DECISIONS.md`.

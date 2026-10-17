@@ -3,231 +3,37 @@
 /**
  * Running program progression/regression logic.
  *
- * Distance: 3 km = 7 laps of 400m + 1 final segment of 200m = 8 segments.
- * Segments are numbered 1..8 from start to finish.
- *
- * State is described by:
- *   baseSpeed  — the lower speed (km/h)
- *   highSegments — how many segments FROM THE END run at baseSpeed + 1
- *
- * When highSegments = 0: entire distance at baseSpeed.
- * When highSegments = 8: entire distance at baseSpeed (which was previously highSpeed).
- *
- * Progression (succeeded = true):
- *   highSegments < 8 → highSegments += 1
- *   highSegments = 8  → baseSpeed += 1, highSegments = 0
- *     (entire distance now at new baseSpeed, next success starts adding +1 from end again)
- *
- * Regression (succeeded = false):
- *   highSegments > 0 → highSegments -= 1
- *   highSegments = 0  → baseSpeed -= 1, highSegments = 8
- *     (entire distance was at baseSpeed, now drop down: full distance at baseSpeed-1...
- *      wait, that's wrong. Let me re-think.)
- *
- * Actually for regression when highSegments = 0 and user fails:
- *   They failed to run all 3km at baseSpeed. So next time we ease off:
- *   The LAST segment (200m) drops to baseSpeed - 1, rest stays at baseSpeed.
- *   That means: baseSpeed stays, but we introduce a SLOWER segment at the end.
- *   But our model only has "base" and "high" where high > base...
- *
- * Re-reading the user's description:
- *   "If entire distance was 13 km/h but couldn't do it, next time:
- *    2800m at 13, last 200m at 12."
- *
- * So when failing at uniform speed X:
- *   → 2800m at X, 200m at X-1.
- *   This means baseSpeed = X-1, highSegments = 7 (7 segments at X from... wait)
- *
- * No. Let me re-model. The segments from the END are the FASTER ones.
- * "2800m at 13, 200m at 12" — here 13 is the faster speed for 7 segments,
- * and 12 is the base for 1 segment (the last 200m).
- *
- * Wait, that contradicts "faster segments from the end". Let me re-read.
- *
- * The user said: "2800m at 13, last 200m at 12."
- * So the BEGINNING is fast (13) and the END is slow (12).
- * But in progression, the END segments get faster first.
- *
- * Hmm, this is actually: when you fail at uniform 13, you can't maintain it
- * for the full distance, so the last part (which is hardest when tired) drops.
- * The slow segment is at the END (where you're most tired).
- *
- * But in progression the pattern was:
- * "2400m at 12, last 600m at 13" — the END gets faster.
- *
- * These seem contradictory but they're not — it's the same model:
- *   base = lower speed, high = higher speed = base + 1
- *   highSegments = number of segments from the END at highSpeed
- *   Remaining segments (from the START) at baseSpeed
- *
- * Progression: 2400m@12 + 600m@13 → highSegments=8 means all@13
- * After success at all@13: baseSpeed becomes 13, highSegments=0 → all@13
- * Next success: highSegments=1 → 2800@13 + 200@14
- *
- * Regression at all@13 (base=13, high=14, highSegments=0):
- *   User says → 2800@13 + 200@12. That means last 200m is SLOWER.
- *   But in our model highSpeed > baseSpeed, and high segments are at the end...
- *
- * OK I need to flip the model:
- *   When highSegments > 0: the last highSegments segments are at highSpeed (= baseSpeed + 1)
- *   When failing at uniform speed and highSegments = 0:
- *     We need: baseSpeed - 1 for the last segment, baseSpeed for the rest
- *     → NEW base = baseSpeed - 1, NEW highSegments = 7
- *       (7 segments from end at (baseSpeed-1)+1 = baseSpeed, 1 segment at baseSpeed-1)
- *     Wait that gives: 1 segment at start = baseSpeed-1, 7 segments at end = baseSpeed
- *     That's: 200m at (baseSpeed-1), 2800m at baseSpeed.
- *     But user wants: 2800m at baseSpeed, 200m at (baseSpeed-1).
- *
- * The issue is that "high segments from the end" in progression means faster at end,
- * but in regression from uniform speed, the LAST part gets slower.
- *
- * Let me re-read the user's example more carefully:
- *
- * REGRESSION example:
- *   "All 3km at 13, failed → next: 2800m at 13, 200m at 12"
- *
- * Wait — is the 200m at 12 at the END or the BEGINNING?
- * Contextually, when you can't maintain speed, you slow down at the END.
- * So: first 2800m at 13, last 200m at 12.
- *
- * But in PROGRESSION:
- *   "All 3km at 12, success → next: first 2800m at 12, last 200m at 13"
- *
- * So in both cases, the change happens FROM THE END.
- * In progression: end segments get FASTER.
- * In regression from uniform: end segments get SLOWER.
- *
- * This means after failing at uniform 13:
- *   → first 2800m at 13, last 200m at 12
- *   If fail again → first 2400m at 13, last 600m at 12
- *   ...continuing to fail → eventually all at 12
- *   Then succeed → first 2800m at 12, last 200m at 13 (back to progression)
- *
- * So the model needs a DIRECTION concept:
- *   ascending: we're adding faster segments from the end (normal progression)
- *   descending: we're adding slower segments from the end (regression mode)
- *
- * Actually no, let me simplify. At any point the plan looks like:
- *   [startDistance @ speedA] + [endDistance @ speedB]
- * where speedB = speedA ± 1, OR the entire distance at one speed.
- *
- * Let me model it differently:
- *   lowSpeed: the slower speed
- *   highSpeed: lowSpeed + 1
- *   highSegmentsFromEnd: how many of the 8 segments (from the end) are at highSpeed
- *
- * Start at lowSpeed = 12, highSegments = 0 → all at 12.
- *
- * PROGRESSION (success):
- *   highSegments < 8 → highSegments += 1 (more fast segments from end)
- *   highSegments = 8 → all at highSpeed → lowSpeed = highSpeed, highSegments = 0
- *     Now all at new lowSpeed (=13). Next success → highSegments = 1 (200m at 14 from end)
- *
- * REGRESSION (failure):
- *   highSegments > 0 → highSegments -= 1 (fewer fast segments from end)
- *   highSegments = 0 → all at lowSpeed, but failed
- *     → need to go below: lowSpeed -= 1, highSegments = 7
- *     Now: 7 segments from end at lowSpeed+1 (= old lowSpeed), 1 segment at new lowSpeed
- *     That is: first 400m at (oldLow - 1), last 2600m at oldLow
- *     But user wants: first 2800m at oldLow, last 200m at (oldLow - 1)
- *
- * THIS DOESN'T MATCH. The user wants the slow segment at the END when regressing
- * past uniform speed, but our model puts the slow segment at the START.
- *
- * SOLUTION: I need TWO models or a state machine with phases.
- *
- * Let me think about this differently. The state is:
- *   speed1, speed2 (where speed2 = speed1 + 1 always)
- *   splitPoint: distance in meters where we switch from speed1 to speed2
- *   splitPoint ranges from 0 to 3000
- *
- * When splitPoint = 0: entire distance at speed2
- * When splitPoint = 3000: entire distance at speed1
- *
- * PROGRESSION: we want more distance at the higher speed → splitPoint decreases
- *   splitPoint goes: 3000 → 2800 → 2400 → 2000 → ... → 0
- *   When splitPoint reaches 0 (all at speed2):
- *     speed1 = speed2, speed2 = speed1 + 1, splitPoint = 3000
- *     But wait, splitPoint=3000 means all at speed1 (=old speed2). Then:
- *     Next success: splitPoint = 2800 (200m of speed2 at the end). ✓
- *
- * REGRESSION: we want more distance at the lower speed → splitPoint increases
- *   splitPoint goes: current → current + 400 (or +200 for first step)
- *   When splitPoint reaches 3000 (all at speed1):
- *     If we fail again: speed2 = speed1, speed1 = speed1 - 1, splitPoint = 0
- *     splitPoint = 0 means all at speed2 (= old speed1). Then:
- *     Next failure: splitPoint = 200 (last 200m slower at speed1). Hmm...
- *
- * Wait let me trace through the regression:
- *   State: speed1=12, speed2=13, splitPoint=0 (all at 13). FAIL.
- *   → splitPoint = 200. Plan: first 200m at 12, last 2800m at 13.
- *   But user wants: first 2800m at 13, last 200m at 12!
- *
- * The issue is that splitPoint means "first X meters at speed1, rest at speed2".
- * speed1 < speed2. So the START is slow, END is fast.
- * But when regressing past uniform, the user wants END to be slow.
- *
- * I think the cleanest model is to think of it as the user described:
- * changes always happen FROM THE END.
- *
- * Let me try a segment array approach mentally, then derive a compact state.
- *
- * The 8 segments from start to end. Each has a speed.
- * At any time, there are at most 2 speeds, and they're always grouped
- * (all of one speed first, then all of the other).
+ * Distance: 3 km = 7 laps of 400 m + a final 200 m segment.
  *
  * State:
- *   speeds: [12,12,12,12,12,12,12,12] — uniform
- *   After success: [12,12,12,12,12,12,12,13] — last segment faster
- *   After success: [12,12,12,12,12,12,13,13] — last 2 faster
- *   ...
- *   After success: [13,13,13,13,13,13,13,13] — uniform at 13
- *   After success: [13,13,13,13,13,13,13,14] — last segment faster
+ *   mainSpeed   — speed of the distance as long as nothing is modified
+ *   endSpeed    — the other speed: mainSpeed + 1 (raised) or mainSpeed - 1 (lowered)
+ *   endSegments — how many segments run at endSpeed; 0 means uniform
  *
- * Now regression from uniform 13:
- *   [13,13,13,13,13,13,13,13] FAIL
- *   → [13,13,13,13,13,13,13,12] — last segment SLOWER
- *   FAIL again → [13,13,13,13,13,13,12,12]
- *   ... → [12,12,12,12,12,12,12,12] — all at 12
- *   FAIL again → [12,12,12,12,12,12,12,11] — last slower
+ * Approved rules:
+ *   - success raises the load from the end of the distance;
+ *   - failure lowers it from the start;
+ *   - success first cancels a lowering and failure first cancels a raise, so the
+ *     change only starts in the other direction once the speed is uniform again;
+ *   - the speed has no ceiling.
  *
- * So the segments from the end can be EITHER faster or slower than the start.
+ * Geometry: the last segment is only 200 m, so a raise covers 200 m first and
+ * 400 m per step afterwards (200, 600, 1000, … 2600 m at the end), while a
+ * lowering covers 400 m per step (400, 800, … 2800 m at the start). The last
+ * step to a uniform speed may take what remains of the distance.
  *
- * State: mainSpeed + endSpeed + endCount
- *   where endSpeed = mainSpeed + 1 (progressing) or mainSpeed - 1 (regressing)
- *   and endCount = 0..8 (0 = uniform)
+ * Plan invariants: a plan is either one speed or two adjacent speeds differing
+ * by 1 km/h, the slower part first; three speeds never occur, and the pair of
+ * speeds changes only through a uniform distance. These hold after a success, a
+ * failure, deleting the last run and restoring a backup — buildRunPlan is the
+ * only place that turns a state into a plan, and it refuses anything else.
  *
- * When endCount = 0: uniform at mainSpeed.
- * When endCount > 0 and endSpeed > mainSpeed: progressing (fast end).
- * When endCount > 0 and endSpeed < mainSpeed: regressing (slow end).
- *
- * SUCCESS:
- *   if endSpeed > mainSpeed (or endCount=0):
- *     endCount < 8 → endCount += 1, endSpeed = mainSpeed + 1
- *     endCount = 8 → mainSpeed = endSpeed, endCount = 0
- *   if endSpeed < mainSpeed (recovering from regression):
- *     endCount > 0 → endCount -= 1 (removing slow segments = getting faster)
- *     endCount = 0 → uniform at mainSpeed (recovered!)
- *
- * Wait this is getting complex. Let me just use the simplest correct model:
- *   mainSpeed: the speed for the FIRST part of the distance
- *   endSpeed: the speed for the LAST part
- *   endSegments: how many segments from the end are at endSpeed (0 = uniform at mainSpeed)
- *
- * endSpeed is always mainSpeed ± 1.
- *
- * OK actually, I realize there's an elegant way:
- *   Just store: baseSpeed and segments as an array direction.
- *   Actually the user's system is simpler than I'm making it.
- *
- * Let me just store the PLAN directly:
- *   segments: speed[] of length 8
- * That's at most 2 distinct values, always contiguous.
- *
- * Then SUCCESS: change the last segment-from-end that matches the LOWER speed
- *              to the HIGHER speed + 1... no this is wrong too.
- *
- * OK let me RESTART with the simplest possible approach. I'll store:
+ * Transitions (see getNextState):
+ *   success: uniform → raise 200 m; raised → one more step; eight steps →
+ *            uniform at the higher speed; lowered → one step less; the last
+ *            step → uniform at mainSpeed
+ *   failure: the mirror image — uniform → lower 400 m; lowered → one more step;
+ *            eight steps → uniform at the lower speed; raised → one step less
  */
 
 // ---- Constants ----
@@ -247,12 +53,53 @@ const STORAGE_KEY = 'ironlog_running_program';
 // ---- Types ----
 
 export interface RunningProgramState {
-  /** Speed for the first portion of the distance (km/h) */
+  /** Speed of the distance as long as nothing is modified (km/h) */
   mainSpeed: number;
-  /** Speed for the end portion, or null if uniform */
+  /**
+   * The speed of the modified part: mainSpeed + 1 when the load was raised,
+   * mainSpeed - 1 when it was lowered, null when the distance is uniform.
+   */
   endSpeed: number | null;
-  /** Number of segments from the end at endSpeed (0 = entire distance at mainSpeed) */
+  /**
+   * How many segments run at endSpeed: the last ones for a raise, the first ones
+   * for a lowering. 0 means the whole distance runs at mainSpeed.
+   */
   endSegments: number;
+  /**
+   * The state this one was produced from, recorded so that deleting the last
+   * run restores it exactly. A uniform state can be reached from two different
+   * states (a promotion and the removal of the last lowered step), so the
+   * previous state cannot be derived from the current one alone.
+   */
+  previous?: RunningProgramStateSnapshot | null;
+}
+
+/** A state without its own rollback snapshot — the stored depth stays bounded. */
+export interface RunningProgramStateSnapshot {
+  mainSpeed: number;
+  endSpeed: number | null;
+  endSegments: number;
+}
+
+/** Copies the three fields of a state, dropping the rollback snapshot. */
+function snapshotOf(state: RunningProgramState): RunningProgramStateSnapshot {
+  return {
+    mainSpeed: state.mainSpeed,
+    endSpeed: state.endSpeed,
+    endSegments: state.endSegments,
+  };
+}
+
+/** Reads a snapshot from persisted JSON, returning null when it is unusable. */
+function snapshotFrom(value: unknown): RunningProgramStateSnapshot | null {
+  if (!value || typeof value !== 'object') return null;
+  const raw = value as Partial<RunningProgramStateSnapshot>;
+  if (typeof raw.mainSpeed !== 'number') return null;
+  return {
+    mainSpeed: raw.mainSpeed,
+    endSpeed: raw.endSpeed ?? null,
+    endSegments: raw.endSegments ?? 0,
+  };
 }
 
 export interface RunSegment {
@@ -265,47 +112,76 @@ export interface RunSegment {
 /**
  * Build the run plan (list of segments with speeds) from the program state.
  * Returns 1 or 2 segments (grouped by speed).
+ *
+ * A plan is either the whole distance at one speed or two adjacent speeds, the
+ * slower part first — the progression can never produce anything else. A stored
+ * state that does not describe that (a hand-edited value, a foreign or damaged
+ * backup) runs uniformly instead of showing a plan the program would never plan.
  */
 export function buildRunPlan(state: RunningProgramState): RunSegment[] {
-  if (state.endSegments === 0 || state.endSpeed === null) {
-    return [{ distanceM: TOTAL_DISTANCE, speedKmh: state.mainSpeed }];
+  const { mainSpeed, endSpeed, endSegments } = state;
+
+  const isModified =
+    endSpeed !== null &&
+    endSegments >= 1 &&
+    Math.abs(endSpeed - mainSpeed) === 1;
+
+  if (!isModified) {
+    return [{ distanceM: TOTAL_DISTANCE, speedKmh: mainSpeed }];
   }
 
-  const endDistance = SEGMENTS.slice(NUM_SEGMENTS - state.endSegments).reduce(
-    (sum, s) => sum + s,
-    0
-  );
-  const mainDistance = TOTAL_DISTANCE - endDistance;
+  // A raise (endSpeed above mainSpeed) covers the END of the distance and
+  // starts with the short 200 m segment; a lowering covers the START of it.
+  const isRaise = endSpeed > mainSpeed;
+  const count = Math.min(endSegments, NUM_SEGMENTS);
+  const changedDistance = (isRaise
+    ? SEGMENTS.slice(NUM_SEGMENTS - count)
+    : SEGMENTS.slice(0, count)
+  ).reduce((sum, segment) => sum + segment, 0);
 
-  if (mainDistance <= 0) {
-    // All segments at endSpeed — shouldn't normally happen (endSegments < 8)
-    return [{ distanceM: TOTAL_DISTANCE, speedKmh: state.endSpeed }];
+  if (changedDistance >= TOTAL_DISTANCE) {
+    // The modification covers everything: uniform at the modified speed.
+    return [{ distanceM: TOTAL_DISTANCE, speedKmh: endSpeed }];
   }
 
-  return [
-    { distanceM: mainDistance, speedKmh: state.mainSpeed },
-    { distanceM: endDistance, speedKmh: state.endSpeed },
-  ];
+  const restDistance = TOTAL_DISTANCE - changedDistance;
+  const rest: RunSegment = { distanceM: restDistance, speedKmh: mainSpeed };
+  const changed: RunSegment = { distanceM: changedDistance, speedKmh: endSpeed };
+
+  return isRaise ? [rest, changed] : [changed, rest];
 }
 
 /**
  * Calculate the next program state after a run result.
  *
- * SUCCESS (+):
- *   - If uniform (endSegments=0): start adding 1 faster segment from end
- *   - If end is faster: add one more fast segment
- *     - If that makes all 8 fast: promote to new uniform (mainSpeed = endSpeed)
- *   - If end is slower (recovering from regression): remove one slow segment
- *     - If that removes all slow: back to uniform at mainSpeed
+ * SUCCESS:
+ *   - uniform (endSegments = 0): start raising the load — one raised segment at
+ *     the end of the distance, which is the short 200 m one;
+ *   - raised: one more segment joins the raised part; when all eight are raised,
+ *     the whole distance runs at the higher speed (mainSpeed becomes endSpeed);
+ *   - lowered: one step of the lowering is cancelled; when the last step goes,
+ *     the speed is uniform again.
  *
- * FAILURE (−):
- *   - If uniform (endSegments=0): start adding 1 slower segment from end
- *   - If end is slower: add one more slow segment
- *     - If that makes all 8 slow: demote to new uniform (mainSpeed = endSpeed)
- *   - If end is faster (was progressing): remove one fast segment
- *     - If that removes all fast: back to uniform at mainSpeed
+ * FAILURE:
+ *   - uniform: start lowering the load — one lowered segment at the start of the
+ *     distance (a full 400 m);
+ *   - lowered: one more segment joins the lowered part; when all eight are
+ *     lowered, the whole distance runs at the lower speed;
+ *   - raised: one step of the raise is cancelled; when the last step goes, the
+ *     speed is uniform again.
  */
 export function getNextState(
+  current: RunningProgramState,
+  succeeded: boolean
+): RunningProgramState {
+  return {
+    ...computeNextState(current, succeeded),
+    previous: snapshotOf(current),
+  };
+}
+
+/** Pure transition; `getNextState` records the rollback snapshot on top of it. */
+function computeNextState(
   current: RunningProgramState,
   succeeded: boolean
 ): RunningProgramState {
@@ -424,6 +300,7 @@ export function loadRunningProgram(): RunningProgramState | null {
       mainSpeed: parsed.mainSpeed,
       endSpeed: parsed.endSpeed ?? null,
       endSegments: parsed.endSegments ?? 0,
+      previous: snapshotFrom(parsed.previous),
     };
   } catch {
     return null;
@@ -445,6 +322,7 @@ export function initRunningProgram(startSpeed: number): RunningProgramState {
     mainSpeed: startSpeed,
     endSpeed: null,
     endSegments: 0,
+    previous: null,
   };
   saveRunningProgram(state);
   return state;
@@ -469,7 +347,9 @@ export function updateRunningProgram(
 ): RunningProgramState | null {
   const current = loadRunningProgram();
   if (!current) return null;
-  const updated = { ...current, ...updates };
+  // A manual edit invalidates the recorded predecessor: undoing a deleted run
+  // on top of hand-edited state would restore a state the user never had.
+  const updated = { ...current, ...updates, previous: null };
   saveRunningProgram(updated);
   return updated;
 }
@@ -524,6 +404,13 @@ export function getPreviousState(
   current: RunningProgramState,
   succeeded: boolean
 ): RunningProgramState {
+  // Exact when the state remembers where it came from. The reasoning below only
+  // has the current state to work with, and a uniform state can be reached from
+  // two different states, so it has to guess between them.
+  if (current.previous) {
+    return { ...current.previous, previous: null };
+  }
+
   const { mainSpeed, endSpeed, endSegments } = current;
 
   if (succeeded) {

@@ -2,4 +2,3 @@
 
 export { ImportPreviewModal } from './ImportPreviewModal';
 export { GymCostCalculator } from './GymCostCalculator';
-export { SyncDiagnostics } from './SyncDiagnostics';

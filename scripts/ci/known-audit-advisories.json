@@ -1,0 +1,42 @@
+{
+  "note": "Известные уязвимости, найденные полным `npm audit`. Это запись, а не признание проверки пройденной: все они dev-only (в поставляемый бандл не попадают, `npm audit --omit=dev` даёт 0), закрываются в Stage 05. Полный аудит считается пройденным только пока набор найденного в точности совпадает с этим списком; любая новая уязвимость или повышение severity красит CI.",
+  "reviewedAt": "2026-10-16",
+  "closeInStage": "Stage 05",
+  "entries": [
+    {
+      "package": "@humanfs/node",
+      "advisory": "GHSA-p498-v437-472g",
+      "severity": "moderate",
+      "scope": "dev",
+      "reason": "Транзитивная зависимость инструментов разработки (цепочка eslint/@humanfs). В бандл приложения не входит."
+    },
+    {
+      "package": "brace-expansion",
+      "advisory": "GHSA-q2hr-2g5m-vwhr",
+      "severity": "moderate",
+      "scope": "dev",
+      "reason": "Транзитивная зависимость glob/minimatch в dev-цепочке. В бандл приложения не входит."
+    },
+    {
+      "package": "brace-expansion",
+      "advisory": "GHSA-qhr7-859c-m2p7",
+      "severity": "high",
+      "scope": "dev",
+      "reason": "Транзитивная зависимость glob/minimatch в dev-цепочке. В бандл приложения не входит."
+    },
+    {
+      "package": "brace-expansion",
+      "advisory": "GHSA-6j4f-fj2g-mc7p",
+      "severity": "high",
+      "scope": "dev",
+      "reason": "Транзитивная зависимость glob/minimatch в dev-цепочке. В бандл приложения не входит."
+    },
+    {
+      "package": "source-map-js",
+      "advisory": "GHSA-68fv-2mgg-jv7q",
+      "severity": "high",
+      "scope": "dev",
+      "reason": "Транзитивная зависимость сборочной цепочки (source-map). В бандл приложения не входит."
+    }
+  ]
+}
