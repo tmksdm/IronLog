@@ -253,6 +253,41 @@ export interface RunningProgramState {
   endSpeed: number | null;
   /** Number of segments from the end at endSpeed (0 = entire distance at mainSpeed) */
   endSegments: number;
+  /**
+   * The state this one was produced from, recorded so that deleting the last
+   * run restores it exactly. A uniform state can be reached from two different
+   * states (a promotion and the removal of the last slow segment), so the
+   * previous state cannot be derived from the current one alone.
+   */
+  previous?: RunningProgramStateSnapshot | null;
+}
+
+/** A state without its own rollback snapshot — the stored depth stays bounded. */
+export interface RunningProgramStateSnapshot {
+  mainSpeed: number;
+  endSpeed: number | null;
+  endSegments: number;
+}
+
+/** Copies the three fields of a state, dropping the rollback snapshot. */
+function snapshotOf(state: RunningProgramState): RunningProgramStateSnapshot {
+  return {
+    mainSpeed: state.mainSpeed,
+    endSpeed: state.endSpeed,
+    endSegments: state.endSegments,
+  };
+}
+
+/** Reads a snapshot from persisted JSON, returning null when it is unusable. */
+function snapshotFrom(value: unknown): RunningProgramStateSnapshot | null {
+  if (!value || typeof value !== 'object') return null;
+  const raw = value as Partial<RunningProgramStateSnapshot>;
+  if (typeof raw.mainSpeed !== 'number') return null;
+  return {
+    mainSpeed: raw.mainSpeed,
+    endSpeed: raw.endSpeed ?? null,
+    endSegments: raw.endSegments ?? 0,
+  };
 }
 
 export interface RunSegment {
@@ -306,6 +341,17 @@ export function buildRunPlan(state: RunningProgramState): RunSegment[] {
  *     - If that removes all fast: back to uniform at mainSpeed
  */
 export function getNextState(
+  current: RunningProgramState,
+  succeeded: boolean
+): RunningProgramState {
+  return {
+    ...computeNextState(current, succeeded),
+    previous: snapshotOf(current),
+  };
+}
+
+/** Pure transition; `getNextState` records the rollback snapshot on top of it. */
+function computeNextState(
   current: RunningProgramState,
   succeeded: boolean
 ): RunningProgramState {
@@ -424,6 +470,7 @@ export function loadRunningProgram(): RunningProgramState | null {
       mainSpeed: parsed.mainSpeed,
       endSpeed: parsed.endSpeed ?? null,
       endSegments: parsed.endSegments ?? 0,
+      previous: snapshotFrom(parsed.previous),
     };
   } catch {
     return null;
@@ -445,6 +492,7 @@ export function initRunningProgram(startSpeed: number): RunningProgramState {
     mainSpeed: startSpeed,
     endSpeed: null,
     endSegments: 0,
+    previous: null,
   };
   saveRunningProgram(state);
   return state;
@@ -469,7 +517,9 @@ export function updateRunningProgram(
 ): RunningProgramState | null {
   const current = loadRunningProgram();
   if (!current) return null;
-  const updated = { ...current, ...updates };
+  // A manual edit invalidates the recorded predecessor: undoing a deleted run
+  // on top of hand-edited state would restore a state the user never had.
+  const updated = { ...current, ...updates, previous: null };
   saveRunningProgram(updated);
   return updated;
 }
@@ -524,6 +574,13 @@ export function getPreviousState(
   current: RunningProgramState,
   succeeded: boolean
 ): RunningProgramState {
+  // Exact when the state remembers where it came from. The reasoning below only
+  // has the current state to work with, and a uniform state can be reached from
+  // two different states, so it has to guess between them.
+  if (current.previous) {
+    return { ...current.previous, previous: null };
+  }
+
   const { mainSpeed, endSpeed, endSegments } = current;
 
   if (succeeded) {
