@@ -19,7 +19,9 @@
  *
  * @param totalReps - Total reps to distribute
  * @param numSets - Number of sets (default 3)
- * @param maxRepsPerSet - Maximum allowed reps per set (default 8)
+ * @param maxRepsPerSet - Maximum allowed reps per set (default 8), or null for
+ *        no ceiling at all. Bodyweight exercises have no weight to progress, so
+ *        their reps must keep growing instead of sticking at the ceiling.
  * @param minRepsPerSet - Minimum allowed reps per set (default 4)
  * @returns Array of rep counts per set, length = numSets
  *
@@ -28,19 +30,21 @@
  *   distributeReps(24, 3) → [8, 8, 8]
  *   distributeReps(12, 3) → [4, 4, 4]
  *   distributeReps(14, 3) → [5, 5, 4]
+ *   distributeReps(30, 3, null) → [10, 10, 10]
  */
 export function distributeReps(
   totalReps: number,
   numSets: number = 3,
-  maxRepsPerSet: number = 8,
+  maxRepsPerSet: number | null = 8,
   minRepsPerSet: number = 4
 ): number[] {
   if (numSets <= 0) {
     return [];
   }
 
-  // Clamp total to valid range
-  const maxTotal = maxRepsPerSet * numSets;
+  // Clamp total to valid range — a null ceiling means reps grow without a cap
+  const maxTotal =
+    maxRepsPerSet === null ? Number.POSITIVE_INFINITY : maxRepsPerSet * numSets;
   const minTotal = minRepsPerSet * numSets;
   const clampedTotal = Math.max(minTotal, Math.min(maxTotal, totalReps));
 
@@ -63,20 +67,22 @@ export function distributeReps(
  * Rule: next target = previous actual total + 1
  *
  * The result is clamped to [minRepsPerSet * numSets, maxRepsPerSet * numSets].
+ * A null ceiling removes the upper bound entirely (see distributeReps).
  *
  * @param previousActualTotal - Sum of actual reps across all working sets last session
  * @param numSets - Number of working sets (default 3)
- * @param maxRepsPerSet - Maximum allowed reps per set (default 8)
+ * @param maxRepsPerSet - Maximum allowed reps per set (default 8), or null for no ceiling
  * @param minRepsPerSet - Minimum allowed reps per set (default 4)
  * @returns Target total reps for next session
  */
 export function calculateNextTargetTotal(
   previousActualTotal: number,
   numSets: number = 3,
-  maxRepsPerSet: number = 8,
+  maxRepsPerSet: number | null = 8,
   minRepsPerSet: number = 4
 ): number {
-  const maxTotal = maxRepsPerSet * numSets;
+  const maxTotal =
+    maxRepsPerSet === null ? Number.POSITIVE_INFINITY : maxRepsPerSet * numSets;
   const minTotal = minRepsPerSet * numSets;
 
   const nextTarget = previousActualTotal + 1;
@@ -90,7 +96,7 @@ export function calculateNextTargetTotal(
  *
  * @param previousActualTotal - Sum of actual reps from last session's working sets
  * @param numSets - Number of working sets (default 3)
- * @param maxRepsPerSet - Max reps per set (default 8)
+ * @param maxRepsPerSet - Max reps per set (default 8), or null for no ceiling
  * @param minRepsPerSet - Min reps per set (default 4)
  * @returns Array of target reps per working set
  *
@@ -100,11 +106,14 @@ export function calculateNextTargetTotal(
  *
  *   // Previous: 7+4+4 = 15, next target = 16 → [6, 5, 5]
  *   calculateNextTargetReps(15) → [6, 5, 5]
+ *
+ *   // Bodyweight: 8+8+8 = 24, no ceiling → 25 → [9, 8, 8]
+ *   calculateNextTargetReps(24, 3, null, 0) → [9, 8, 8]
  */
 export function calculateNextTargetReps(
   previousActualTotal: number,
   numSets: number = 3,
-  maxRepsPerSet: number = 8,
+  maxRepsPerSet: number | null = 8,
   minRepsPerSet: number = 4
 ): number[] {
   const nextTotal = calculateNextTargetTotal(

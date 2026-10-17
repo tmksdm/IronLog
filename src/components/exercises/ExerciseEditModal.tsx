@@ -264,20 +264,23 @@ export function ExerciseEditModal({
 
         {/* Reps parameters — inline layout to avoid overflow */}
         <div className="space-y-3">
-          <NumberStepper
-            label="Макс повторений"
-            value={maxRepsPerSet}
-            onChange={(v) => {
-              setMaxRepsPerSet(v);
-              // Keep min ≤ max
-              if (minRepsPerSet > v) setMinRepsPerSet(v);
-            }}
-            min={hasAddedWeight ? 4 : 1}
-            max={99}
-            step={1}
-            size="sm"
-            layout="inline"
-          />
+          {/* Bodyweight exercises progress by reps only, so they have no ceiling. */}
+          {hasAddedWeight && (
+            <NumberStepper
+              label="Макс повторений"
+              value={maxRepsPerSet}
+              onChange={(v) => {
+                setMaxRepsPerSet(v);
+                // Keep min ≤ max
+                if (minRepsPerSet > v) setMinRepsPerSet(v);
+              }}
+              min={4}
+              max={99}
+              step={1}
+              size="sm"
+              layout="inline"
+            />
+          )}
           <NumberStepper
             label="Мин повторений"
             value={minRepsPerSet}

@@ -258,10 +258,12 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
               );
             } else {
               const previousTotal = lastLogs.reduce((sum, log) => sum + log.actualReps, 0);
+              // Bodyweight exercises have no weight to progress, so their rep
+              // target keeps growing instead of sticking at maxRepsPerSet.
               targetRepsPerSet = calculateNextTargetReps(
                 previousTotal,
                 exercise.numWorkingSets,
-                exercise.maxRepsPerSet,
+                exercise.hasAddedWeight ? exercise.maxRepsPerSet : null,
                 exercise.minRepsPerSet
               );
             }
