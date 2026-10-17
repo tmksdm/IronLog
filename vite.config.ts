@@ -87,6 +87,13 @@ function listBuildFiles(directory: string, root = directory): string[] {
 
 // Generate a versioned app shell. Updates activate automatically so even a
 // client with a broken UI can recover without pressing an in-app button.
+//
+// Cached assets are matched with `ignoreVary` on purpose. A host that adds a
+// `Vary` header (GitHub Pages sends `Vary: Accept-Encoding`, a CORS-enabled
+// server sends `Vary: Origin`) otherwise makes `cache.match` miss for the very
+// resources that were precached, and the shell falls back to the network —
+// which offline means a blank page. The precache is our own immutable build
+// output, so the vary check has no value here.
 function controlledUpdateServiceWorkerPlugin(base: string, cachePrefix = 'ironlog-') {
   return {
     name: 'controlled-update-service-worker',
@@ -166,7 +173,7 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  event.respondWith(caches.match(event.request, { ignoreSearch: true }).then((cached) => cached || fetch(event.request)));
+  event.respondWith(caches.match(event.request, { ignoreSearch: true, ignoreVary: true }).then((cached) => cached || fetch(event.request)));
 });
 `;
       writeFileSync(resolve(outDir, 'sw.js'), source);
