@@ -24,6 +24,14 @@ import type { ImportPreview } from '../utils';
 import { useAppStore } from '../stores/appStore';
 import { APP_VERSION, CHANGELOG } from '../version';
 
+/**
+ * Build id of the running bundle (empty in dev). Shown next to the version so a
+ * test build can be identified on the device without developer tools.
+ */
+const RUNNING_BUILD_ID = typeof import.meta.env.VITE_BUILD_ID === 'string'
+  ? import.meta.env.VITE_BUILD_ID
+  : '';
+
 // ==========================================
 // Menu item component
 // ==========================================
@@ -113,7 +121,12 @@ function ChangelogSection() {
           <Info size={20} className="text-[#888]" />
         </div>
         <div className="flex-1 min-w-0">
-          <div className="text-white font-medium">IronLog v{APP_VERSION}</div>
+          <div className="text-white font-medium">
+            IronLog v{APP_VERSION}
+            {RUNNING_BUILD_ID && (
+              <span className="text-xs text-[#707070] font-normal"> · сборка {RUNNING_BUILD_ID}</span>
+            )}
+          </div>
           <div className="text-xs text-[#707070] mt-0.5">
             Нажми, чтобы {isExpanded ? 'скрыть' : 'показать'} историю изменений
           </div>

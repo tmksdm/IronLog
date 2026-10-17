@@ -1,9 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { activateWaitingServiceWorker, checkForUpdate } from './updateChecker';
+import { APP_VERSION } from '../version';
 
 describe('checkForUpdate', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
   });
 
   it('returns the version and release notes for a newer release', async () => {
@@ -26,6 +28,40 @@ describe('checkForUpdate', () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
       ok: true,
       json: () => Promise.resolve({ version: '0.26.1', changes: ['Без изменений'] }),
+    }));
+
+    await expect(checkForUpdate()).resolves.toEqual({ available: false });
+  });
+
+  it('offers a republished build of the installed version', async () => {
+    vi.stubEnv('VITE_BUILD_ID', 'local-aaa');
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ version: APP_VERSION, buildId: 'local-bbb', changes: [] }),
+    }));
+
+    await expect(checkForUpdate()).resolves.toEqual({
+      available: true,
+      remoteVersion: APP_VERSION,
+      changes: [],
+    });
+  });
+
+  it('does not offer the build that is already installed', async () => {
+    vi.stubEnv('VITE_BUILD_ID', 'local-aaa');
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ version: APP_VERSION, buildId: 'local-aaa', changes: [] }),
+    }));
+
+    await expect(checkForUpdate()).resolves.toEqual({ available: false });
+  });
+
+  it('ignores a build id while the installed bundle has none', async () => {
+    vi.stubEnv('VITE_BUILD_ID', '');
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ version: APP_VERSION, buildId: 'local-bbb', changes: [] }),
     }));
 
     await expect(checkForUpdate()).resolves.toEqual({ available: false });

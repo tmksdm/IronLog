@@ -36,6 +36,27 @@ function getReleaseMetadata(): ReleaseMetadata {
   }
 }
 
+/**
+ * Identifies this particular build, not just the release it belongs to.
+ *
+ * A browser installs a new service worker only when `sw.js` itself changed, so a
+ * republished build of the same version — which is the normal case for the test
+ * stand — would otherwise never reach an installed PWA. The id is therefore
+ * embedded in `sw.js`, published in `version.json` and baked into the bundle, so
+ * the running app can also tell whether the deployed build is the one it is.
+ *
+ * Computed once per build: the worker, `version.json` and the bundle must agree.
+ */
+let buildId: string | null = null;
+function getBuildId(): string {
+  if (buildId) return buildId;
+  const source = process.env.IRONLOG_BUILD_ID
+    || process.env.GITHUB_SHA?.slice(0, 7)
+    || 'local';
+  buildId = `${source}-${Date.now().toString(36)}`;
+  return buildId;
+}
+
 // Vite plugin: generate version.json in the output directory after build
 function versionJsonPlugin() {
   return {
@@ -47,9 +68,9 @@ function versionJsonPlugin() {
       mkdirSync(outDir, { recursive: true });
       writeFileSync(
         resolve(outDir, 'version.json'),
-        JSON.stringify({ version, changes, timestamp: Date.now() })
+        JSON.stringify({ version, changes, buildId: getBuildId(), timestamp: Date.now() })
       );
-      console.log(`✅ version.json generated: ${version}`);
+      console.log(`✅ version.json generated: ${version} (${getBuildId()})`);
     },
   };
 }
@@ -76,8 +97,10 @@ function controlledUpdateServiceWorkerPlugin(base: string, cachePrefix = 'ironlo
       const files = listBuildFiles(outDir)
         .filter((file) => file !== 'sw.js' && file !== 'version.json')
         .map((file) => `${base}${file}`);
+      // BUILD_ID is what makes two builds of the same version different files.
       const source = `const CACHE_PREFIX = ${JSON.stringify(cachePrefix)};
-const CACHE_NAME = ${JSON.stringify(`${cachePrefix}${version}`)};
+const BUILD_ID = ${JSON.stringify(getBuildId())};
+const CACHE_NAME = CACHE_PREFIX + ${JSON.stringify(version)} + '-' + BUILD_ID;
 const PRECACHE_URLS = ${JSON.stringify(files)};
 const APP_SHELL = ${JSON.stringify(`${base}index.html`)};
 
@@ -147,7 +170,7 @@ self.addEventListener('fetch', (event) => {
 });
 `;
       writeFileSync(resolve(outDir, 'sw.js'), source);
-      console.log(`Service worker generated: ${version}`);
+      console.log(`Service worker generated: ${version} (${getBuildId()})`);
     },
   };
 }
@@ -263,6 +286,10 @@ export default defineConfig(({ mode }) => {
 
   return {
     base,
+    define: {
+      // Lets the running app compare itself with the deployed build.
+      'import.meta.env.VITE_BUILD_ID': JSON.stringify(getBuildId()),
+    },
     plugins: [
       react(),
       tailwindcss(),
