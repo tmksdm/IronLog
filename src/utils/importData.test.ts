@@ -14,7 +14,7 @@ import initSqlJs, { type Database } from 'sql.js';
 import { CREATE_TABLES_SQL } from '../db/schema';
 import { buildBackupData } from './exportData';
 import { parseBackupJSON, restoreFromBackup } from './importData';
-import { loadRunningProgram, saveRunningProgram } from './runningProgram';
+import { buildRunPlan, loadRunningProgram, saveRunningProgram } from './runningProgram';
 import { loadPullupProgram, savePullupProgram } from './pullupProgram';
 import type { BackupData } from '../types';
 
@@ -226,6 +226,12 @@ describe('backup round trip', () => {
       day3TargetReps: 7,
       day4TargetReps: 9,
     });
+
+    // A restored program still plans one speed or two adjacent ones, slower first.
+    expect(buildRunPlan(loadRunningProgram()!)).toEqual([
+      { distanceM: 2800, speedKmh: 12 },
+      { distanceM: 200, speedKmh: 13 },
+    ]);
 
     // The exported document carries them back out again.
     const exported = await buildBackupData();
