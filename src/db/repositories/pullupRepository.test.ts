@@ -11,11 +11,6 @@ vi.mock('../database', () => ({
   saveToStore: vi.fn(),
 }));
 
-vi.mock('../../lib/sync', () => ({
-  flushPendingCloudDeletions: vi.fn(),
-  queueCloudDeletion: vi.fn(),
-}));
-
 import { getMonthlyPullups, getYearlyPullups } from './pullupRepository';
 
 describe('pull-up analytics', () => {

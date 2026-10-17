@@ -13,11 +13,6 @@ vi.mock('../database', () => ({
   saveToStore: mocks.saveToStore,
 }));
 
-vi.mock('../../lib/sync', () => ({
-  flushPendingCloudDeletions: vi.fn(),
-  queueCloudDeletion: vi.fn(),
-}));
-
 import {
   finishWorkoutSession,
   getLastWorkingLogsForExercise,

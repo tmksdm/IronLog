@@ -5,7 +5,6 @@ const mocks = vi.hoisted(() => ({
   getNextDayTypeId: vi.fn(),
   getAllSessions: vi.fn(),
   loadWorkoutState: vi.fn(),
-  pullFromCloud: vi.fn(),
 }));
 
 vi.mock('../db', () => ({
@@ -22,10 +21,6 @@ vi.mock('../db', () => ({
   },
 }));
 
-vi.mock('../lib/sync', () => ({
-  pullFromCloud: mocks.pullFromCloud,
-}));
-
 import { useAppStore } from './appStore';
 
 describe('app initialization', () => {
@@ -39,7 +34,6 @@ describe('app initialization', () => {
     mocks.getNextDayTypeId.mockResolvedValue(1);
     mocks.getAllSessions.mockResolvedValue([]);
     mocks.loadWorkoutState.mockResolvedValue(null);
-    mocks.pullFromCloud.mockResolvedValue(false);
   });
 
   it('does not open SQLite twice during concurrent startup effects', async () => {

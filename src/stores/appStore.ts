@@ -4,8 +4,6 @@
  * Global application store.
  *
  * App always starts on LOCAL data (instant).
- * Cloud pull only happens if local DB is empty (new device / reinstall).
- * Cloud push happens after workout finish, import, exercise edits.
  */
 
 import { create } from 'zustand';
@@ -24,7 +22,6 @@ import {
   workoutStateRepo,
 } from '../db';
 import { getDirectionForNextSession } from '../utils';
-import { pullFromCloud } from '../lib/sync';
 
 export interface AppState {
   // --- Data ---
@@ -35,10 +32,6 @@ export interface AppState {
   isLoading: boolean;
   isInitialized: boolean;
   initializationError: string | null;
-
-  // --- Sync ---
-  isSyncing: boolean;
-  lastSyncError: string | null;
 
   // --- Crash resilience ---
   pendingRestore: WorkoutSnapshot | null;
@@ -60,8 +53,6 @@ export const useAppStore = create<AppState>((set, get) => ({
   isLoading: false,
   isInitialized: false,
   initializationError: null,
-  isSyncing: false,
-  lastSyncError: null,
   pendingRestore: null,
 
   initialize: async () => {
@@ -107,27 +98,6 @@ export const useAppStore = create<AppState>((set, get) => ({
         isInitialized: true,
         pendingRestore,
       });
-
-      // 2. Try cloud pull in background.
-      // pullFromCloud() internally checks: if local has data → skips.
-      // Only pulls if local is empty (new device / reinstall).
-      set({ isSyncing: true, lastSyncError: null });
-      pullFromCloud()
-        .then(async (hadChanges) => {
-          if (hadChanges) {
-            // Restored from cloud into empty local DB — refresh UI
-            await get().refreshNextDayInfo();
-            console.log('Restored data from cloud (local was empty)');
-          }
-        })
-        .catch((err: any) => {
-          // Server unreachable — no problem, local data is fine
-          console.error('Cloud sync failed:', err);
-          set({ lastSyncError: err?.message ?? 'Sync failed' });
-        })
-        .finally(() => {
-          set({ isSyncing: false });
-        });
     } catch (error) {
       console.error('Failed to initialize app store:', error);
       set({

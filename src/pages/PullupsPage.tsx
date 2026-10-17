@@ -11,7 +11,6 @@
  *
  * On save: writes a standalone pullup_logs entry (workout_session_id = null,
  * date = now), applies the pull-up program progression, clears the snapshot,
- * and pushes to cloud in the background.
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
@@ -22,7 +21,6 @@ import { ConfirmModal } from '../components/workout';
 import { pullupRepo, pullupStateRepo } from '../db';
 import { applyAndSaveDayResult } from '../utils/pullupProgram';
 import { getPullupDayName } from '../utils/pullupProgram';
-import { pushToCloud } from '../lib/sync';
 import type { PullupStepResult, PullupInProgressState } from '../types';
 import { ChevronLeft, Check, SkipForward } from 'lucide-react';
 
@@ -129,10 +127,6 @@ export function PullupsPage() {
         // Clear the crash-resilience snapshot  session is done.
         await pullupStateRepo.clearPullupState();
 
-        // Background cloud backup (silent; may need VPN  fine if it fails).
-        pushToCloud().catch((err) =>
-          console.error('Cloud push after standalone pullups failed:', err)
-        );
 
         setResult(res);
         setPhase('done');

@@ -32,7 +32,6 @@ import {
   distributeReps,
   type PlannedSet,
 } from '../utils';
-import { pushToCloud } from '../lib/sync';
 
 
 // ---- Types ----
@@ -258,10 +257,12 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
               );
             } else {
               const previousTotal = lastLogs.reduce((sum, log) => sum + log.actualReps, 0);
+              // Bodyweight exercises have no weight to progress, so their rep
+              // target keeps growing instead of sticking at maxRepsPerSet.
               targetRepsPerSet = calculateNextTargetReps(
                 previousTotal,
                 exercise.numWorkingSets,
-                exercise.maxRepsPerSet,
+                exercise.hasAddedWeight ? exercise.maxRepsPerSet : null,
                 exercise.minRepsPerSet
               );
             }
@@ -446,10 +447,6 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
       const finishedSession = await workoutRepo.getWorkoutSessionById(session.id);
       await workoutStateRepo.clearWorkoutState();
 
-      // Sync to cloud (fire and forget — don't block UI)
-      pushToCloud().catch((err) =>
-        console.error('Cloud sync after workout failed:', err)
-      );
 
       set({
         session: finishedSession,

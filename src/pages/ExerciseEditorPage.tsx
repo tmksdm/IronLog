@@ -268,7 +268,9 @@ function ExerciseRow({
         <div className="text-xs text-[#707070] mt-0.5">
           {weightText}
           <span className="mx-1.5">·</span>
-          {exercise.maxRepsPerSet}×{exercise.numWorkingSets}
+          {exercise.hasAddedWeight
+            ? `${exercise.maxRepsPerSet}×${exercise.numWorkingSets}`
+            : `${exercise.numWorkingSets} подх. · без ограничения повторов`}
           {exercise.hasAddedWeight && (
             <>
               <span className="mx-1.5">·</span>
