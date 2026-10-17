@@ -23,12 +23,12 @@ export const PRODUCTION_HOSTNAME = 'tmksdm.github.io';
 
 /**
  * Hostname of the test PWA. It lives in a separate GitHub organisation, which
- * gives it a separate origin. Empty until that organisation exists — an empty
- * value is deliberate fail-closed configuration.
+ * gives it a separate origin.
  *
- * TODO(Stage 00 / 4.3): set to '<organisation>.github.io' when it is created.
+ * This value is set on the test-deploy branch only; develop and main keep it
+ * empty, so the fail-closed behaviour of the main line is preserved.
  */
-export const TEST_HOSTNAME = '';
+export const TEST_HOSTNAME = 'ironlog-test.github.io';
 
 const LOCAL_HOSTNAMES = new Set(['localhost', '127.0.0.1', '::1', '[::1]']);
 
